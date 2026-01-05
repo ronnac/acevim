@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Text Editor</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-text.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/keybinding-vim.min.js"></script>
+</head>
+<body>  
+  <button id="open-file-button" style="position: absolute; top: 10px; left: 10px;">Open File</button>
+  <button id="save-file-button" style="position: absolute; top: 10px; left: 100px;">Save File</button>
+  <div id="editor" style="position: absolute; top: 40px; right: 0; bottom: 0; left: 0;"></div>
+  <script>
+    var editor = ace.edit("editor");
+    editor.getSession().setMode("ace/mode/text");
+    editor.setTheme("ace/theme/monokai");
+    editor.setKeyboardHandler("ace/keyboard/vim");
+    editor.renderer.setShowGutter(false);
+    editor.setFontSize(20);
+
+    var fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.style.display = "none";
+
+    fileInput.addEventListener("change", function() {
+      var file = fileInput.files[0];
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        editor.getSession().setValue(e.target.result);
+      };
+      var mode = getModeFromFilename(file.name);
+      editor.getSession().setMode("ace/mode/" + mode);
+      reader.readAsText(file);
+      originalFileName = file.name; // store the original file name
+    });
+    
+    document.addEventListener("keydown", function(e) {
+      if (e.ctrlKey && e.key === "s") {
+        document.getElementById("save-file-button").click();
+        e.preventDefault();
+      } else if (e.ctrlKey && e.key === "o") {
+        document.getElementById("open-file-button").click();
+        e.preventDefault();
+      }
+    });
+    
+    document.getElementById("editor").addEventListener("dblclick", function() {
+      var elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if (elem.mozRequestFullScreen) {
+        elem.mozRequestFullScreen();
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      }
+    });
+    
+
+    function getModeFromFilename(filename) {
+      var ext = filename.split('.').pop().toLowerCase();
+      var modes = {
+        "js": "javascript",
+        "html": "html",
+        "css": "css",
+        "php": "php",
+        "java": "java",
+        "python": "python",
+        // add more extensions and modes as needed
+      };
+      return modes[ext] || "text";
+    }
+    document.getElementById("open-file-button").addEventListener("click", function() {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", function() {
+      var file = fileInput.files[0];
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        editor.getSession().setValue(e.target.result);
+      };
+      reader.readAsText(file);
+    });
+
+    var originalFileName = "";
+
+    document.getElementById("save-file-button").addEventListener("click", function() {
+      if (originalFileName) {
+        var fileContent = editor.getSession().getValue();
+        var blob = new Blob([fileContent], {type: "text/plain"});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = originalFileName;
+        a.click();
+      } else {
+        alert("Please open a file first");
+      }
+    });
+
+    fileInput.addEventListener("change", function() {
+      originalFileName = fileInput.files[0].name;
+    });
+  </script>
+</body>
+</html>
