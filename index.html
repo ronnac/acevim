@@ -90,6 +90,10 @@
         VimApi.defineEx("open", "o", function(cm, input) {
           document.getElementById("open-file-button").click();
         });
+        
+        // Add ZZ (save and continue) and ZQ (quit without save) key mappings
+        VimApi.map("ZZ", ":w<CR>", "normal");
+        VimApi.map("ZQ", "<Esc>", "normal");
       });
     });
     
