@@ -14,11 +14,11 @@
   </style>
 </head>
 <body>  
-  <button id="open-file-button" style="position: absolute; top: 10px; left: 10px; z-index: 1000;">Open File</button>
-  <button id="save-file-button" style="position: absolute; top: 10px; left: 100px; z-index: 1000;">Save File</button>
+  <button id="open-file-button" style="display: none;">Open File</button>
+  <button id="save-file-button" style="display: none;">Save File</button>
   <button id="install-button" style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: none;">Install App</button>
-  <span id="status" style="position: absolute; top: 14px; left: 200px; color: #aaa; z-index: 1000;"></span>
-  <div id="editor" style="position: absolute; top: 40px; right: 0; bottom: 0; left: 0;"></div>
+  <span id="status" style="position: absolute; top: 10px; left: 10px; color: #aaa; z-index: 1000;"></span>
+  <div id="editor" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0;"></div>
   <script>
     // Register Service Worker
     if ('serviceWorker' in navigator) {
@@ -75,7 +75,7 @@
     editor.renderer.setShowGutter(false);
     editor.setFontSize(20);
     
-    // Add custom Vim :w command
+    // Add custom Vim commands
     ace.config.loadModule("ace/keyboard/vim", function(module) {
       var VimApi = module.CodeMirror.Vim;
       VimApi.defineEx("write", "w", function(cm, input) {
@@ -83,6 +83,12 @@
       });
       VimApi.defineEx("wq", "wq", function(cm, input) {
         document.getElementById("save-file-button").click();
+      });
+      VimApi.defineEx("edit", "e", function(cm, input) {
+        document.getElementById("open-file-button").click();
+      });
+      VimApi.defineEx("open", "o", function(cm, input) {
+        document.getElementById("open-file-button").click();
       });
     });
     
@@ -221,4 +227,4 @@
     });
   </script>
 </body>
-</html>/html>
+</html>
