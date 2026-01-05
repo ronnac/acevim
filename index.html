@@ -113,6 +113,19 @@
       }
     });
     
+    document.getElementById("editor").addEventListener("dblclick", function() {
+      var elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if (elem.mozRequestFullScreen) {
+        elem.mozRequestFullScreen();
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      }
+    });
+    
     function getModeFromFilename(filename) {
       var ext = filename.split('.').pop().toLowerCase();
       var modes = {
@@ -127,10 +140,82 @@
         "md": "markdown",
         "c": "c_cpp",
         "cpp": "c_cpp",
-        "sh": "sh"
+        "sh": "sh",
+        "fs": "forth",
+        "fth": "forth",
+        "4th": "forth",
+        "forth": "forth"
       };
       return modes[ext] || "text";
     }
+    
+    // Define Forth syntax highlighting
+    ace.define("ace/mode/forth", ["require", "exports", "module", "ace/lib/oop", "ace/mode/text", "ace/mode/text_highlight_rules"], function(require, exports, module) {
+      var oop = require("../lib/oop");
+      var TextMode = require("./text").Mode;
+      var TextHighlightRules = require("./text_highlight_rules").TextHighlightRules;
+      
+      var ForthHighlightRules = function() {
+        this.$rules = {
+          "start": [
+            {
+              token: "comment.line",
+              regex: /\\.*$/
+            },
+            {
+              token: "comment.block",
+              regex: /\(.*?\)/
+            },
+            {
+              token: "string.quoted",
+              regex: /\."[^"]*"/
+            },
+            {
+              token: "string.quoted",
+              regex: /s"[^"]*"/i
+            },
+            {
+              token: "constant.numeric",
+              regex: /\b-?\d+\.?\d*\b/
+            },
+            {
+              token: "constant.numeric",
+              regex: /\$[0-9A-Fa-f]+/
+            },
+            {
+              token: "keyword.control",
+              regex: /\b(IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|\+LOOP|LEAVE|EXIT|RECURSE|CASE|OF|ENDOF|ENDCASE)\b/i
+            },
+            {
+              token: "keyword.operator",
+              regex: /\b(\+|-|\*|\/|MOD|\/MOD|\*\/|ABS|NEGATE|MIN|MAX|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|<=|>=|0=|0<|0>)\b/i
+            },
+            {
+              token: "support.function",
+              regex: /\b(:|;|CONSTANT|VARIABLE|CREATE|DOES>|ALLOT|,|!|@|C!|C@|\+!|2!|2@|DUP|DROP|SWAP|OVER|ROT|PICK|ROLL|>R|R>|R@|2DUP|2DROP|2SWAP|2OVER)\b/i
+            },
+            {
+              token: "support.function",
+              regex: /\b(EMIT|CR|SPACE|SPACES|TYPE|\.|\.\"|KEY|WORD|ACCEPT|FIND|EXECUTE|EVALUATE)\b/i
+            },
+            {
+              token: "entity.name.function",
+              regex: /:\s+\S+/
+            }
+          ]
+        };
+      };
+      
+      oop.inherits(ForthHighlightRules, TextHighlightRules);
+      
+      var Mode = function() {
+        this.HighlightRules = ForthHighlightRules;
+      };
+      
+      oop.inherits(Mode, TextMode);
+      
+      exports.Mode = Mode;
+    });
     
     document.getElementById("open-file-button").addEventListener("click", async function() {
       if (supportsFileSystemAccess) {
