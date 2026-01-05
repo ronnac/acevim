@@ -71,24 +71,25 @@
     var editor = ace.edit("editor");
     editor.getSession().setMode("ace/mode/text");
     editor.setTheme("ace/theme/monokai");
-    editor.setKeyboardHandler("ace/keyboard/vim");
     editor.renderer.setShowGutter(false);
     editor.setFontSize(20);
     
-    // Add custom Vim commands
-    ace.config.loadModule("ace/keyboard/vim", function(module) {
-      var VimApi = module.CodeMirror.Vim;
-      VimApi.defineEx("write", "w", function(cm, input) {
-        document.getElementById("save-file-button").click();
-      });
-      VimApi.defineEx("wq", "wq", function(cm, input) {
-        document.getElementById("save-file-button").click();
-      });
-      VimApi.defineEx("edit", "e", function(cm, input) {
-        document.getElementById("open-file-button").click();
-      });
-      VimApi.defineEx("open", "o", function(cm, input) {
-        document.getElementById("open-file-button").click();
+    // Set Vim mode and add custom commands
+    editor.setKeyboardHandler("ace/keyboard/vim", function() {
+      ace.config.loadModule("ace/keyboard/vim", function(module) {
+        var VimApi = module.CodeMirror.Vim;
+        VimApi.defineEx("write", "w", function(cm, input) {
+          document.getElementById("save-file-button").click();
+        });
+        VimApi.defineEx("wq", "wq", function(cm, input) {
+          document.getElementById("save-file-button").click();
+        });
+        VimApi.defineEx("edit", "e", function(cm, input) {
+          document.getElementById("open-file-button").click();
+        });
+        VimApi.defineEx("open", "o", function(cm, input) {
+          document.getElementById("open-file-button").click();
+        });
       });
     });
     
