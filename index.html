@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+VG<!DOCTYPE html>
 <html>
 <head>
   <title>Text Editor</title>
@@ -17,7 +17,7 @@
   <button id="open-file-button" style="display: none;">Open File</button>
   <button id="save-file-button" style="display: none;">Save File</button>
   <button id="install-button" style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: none;">Install App</button>
-  <span id="status" style="position: absolute; top: 10px; left: 10px; color: #aaa; z-index: 1000;"></span>
+  <span id="status" style="position: absolute; top: 10px; left: 10px; color: #aaa; z-index: 1000; font-family: monospace; font-size: 14px;"></span>
   <div id="editor" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0;"></div>
   <script>
     // Register Service Worker
@@ -100,7 +100,7 @@
     const supportsFileSystemAccess = 'showOpenFilePicker' in window;
     
     if (!supportsFileSystemAccess) {
-      document.getElementById("status").textContent = "⚠️ File System Access API not supported (will download instead)";
+      document.getElementById("status").textContent = "File System Access API not supported (will download instead)";
     }
     
     document.addEventListener("keydown", function(e) {
@@ -163,7 +163,7 @@
           var mode = getModeFromFilename(file.name);
           editor.getSession().setMode("ace/mode/" + mode);
           
-          document.getElementById("status").textContent = "📝 " + originalFileName;
+          document.getElementById("status").textContent = originalFileName;
         } catch (err) {
           if (err.name !== 'AbortError') {
             console.error('Error opening file:', err);
@@ -183,7 +183,7 @@
             var mode = getModeFromFilename(file.name);
             editor.getSession().setMode("ace/mode/" + mode);
             originalFileName = file.name;
-            document.getElementById("status").textContent = "📝 " + originalFileName + " (download mode)";
+            document.getElementById("status").textContent = originalFileName + " (download mode)";
           };
           reader.readAsText(file);
         });
@@ -205,9 +205,9 @@
           await writable.write(fileContent);
           await writable.close();
           
-          document.getElementById("status").textContent = "✓ Saved: " + originalFileName;
+          document.getElementById("status").textContent = "Saved: " + originalFileName;
           setTimeout(() => {
-            document.getElementById("status").textContent = "📝 " + originalFileName;
+            document.getElementById("status").textContent = originalFileName;
           }, 2000);
         } catch (err) {
           console.error('Error saving file:', err);
@@ -223,7 +223,7 @@
         a.click();
         URL.revokeObjectURL(url);
         
-        document.getElementById("status").textContent = "⬇️ Downloaded: " + originalFileName;
+        document.getElementById("status").textContent = "Downloaded: " + originalFileName;
       }
     });
   </script>
