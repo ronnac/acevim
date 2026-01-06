@@ -39,32 +39,6 @@
       ace.config.loadModule("ace/keyboard/vim", function(module) {
         var VimApi = module.CodeMirror.Vim;
         
-        // Sync Vim yank with system clipboard
-        VimApi.defineAction('yankToSystemClipboard', function(cm, actionArgs) {
-          var text = cm.getSelection();
-          if (text) {
-            navigator.clipboard.writeText(text).catch(err => console.error('Clipboard write failed:', err));
-          }
-        });
-        
-        // Override y (yank) to also copy to system clipboard
-        VimApi.mapCommand("y", "action", "yankToSystemClipboard", {}, { context: "visual" });
-        
-        // Sync system clipboard to Vim paste
-        VimApi.defineAction('pasteFromSystemClipboard', async function(cm) {
-          try {
-            const text = await navigator.clipboard.readText();
-            if (text) {
-              cm.replaceSelection(text);
-            }
-          } catch (err) {
-            console.error('Clipboard read failed:', err);
-          }
-        });
-        
-        // Map leader+p to paste from system clipboard in normal mode
-        VimApi.map("<Leader>p", ":action pasteFromSystemClipboard<CR>", "normal");
-        
         VimApi.defineEx("write", "w", function(cm, input) {
           document.getElementById("save-file-button").click();
         });
@@ -88,6 +62,31 @@
         // Quit without save
         VimApi.map("ZQ", ":q<CR>", "normal");
       });
+    });
+    
+    // Sync clipboard with system using Ace's events
+    editor.on("copy", function(text) {
+      navigator.clipboard.writeText(text).catch(err => console.error('Clipboard write failed:', err));
+    });
+    
+    editor.on("cut", function(text) {
+      navigator.clipboard.writeText(text).catch(err => console.error('Clipboard write failed:', err));
+    });
+    
+    // Handle paste from system clipboard
+    editor.commands.addCommand({
+      name: "pasteFromClipboard",
+      bindKey: {win: "Ctrl-V", mac: "Cmd-V"},
+      exec: async function(editor) {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (text) {
+            editor.insert(text);
+          }
+        } catch (err) {
+          console.error('Clipboard read failed:', err);
+        }
+      }
     }); 
 
     // Handle files opened via Windows "Open With" (Launch Queue)
@@ -274,12 +273,15 @@
           "start": [
             { token: "comment.line", regex: /\\.*$/ },
             { token: "comment.block", regex: /\(.*?\)/ },
-            { token: "string.quoted", regex: /\b\."\s+[^"]*"/ },
+            { token: "string.quoted", regex: /\."\s+[^"]*"/ },
+            { token: "string.quoted", regex: /s"\s+[^"]*"/i },
             { token: "constant.numeric", regex: /\b-?\d+\.?\d*\b/ },
-            { token: "keyword.control", regex: /\b(?:IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|LEAVE|EXIT|AGAIN)\b/i },
-            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|AND|OR|XOR|LSHIFT|RSHIFT|=|<>|<|>|1\+|1-|2\*|2\/)\b/i },
-            { token: "support.function", regex: /\b(?:DUP|DROP|SWAP|OVER|ROT|NIP|TUCK|PICK|ROLL|EMIT|CR|SPACE|TYPE|KEY|WORDS|SEE|ABORT|QUIT|\.|\.\?|@|!|\+!|C@|C!|CELL\+|CELLS|ALLOT|HERE)\b/i },
-            { token: "variable.language", regex: /\b(?::|;|CONSTANT|VARIABLE|CREATE|DOES>|VALUE|TO|USER)\b/i }
+            { token: "constant.numeric", regex: /\$[0-9A-Fa-f]+/ },
+            { token: "keyword.control", regex: /\b(?:IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|\+LOOP|LEAVE|EXIT|AGAIN|RECURSE|CASE|OF|ENDOF|ENDCASE)\b/i },
+            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|\/MOD|\*\/MOD|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|<=|>=|0=|0<|0>|1\+|1-|2\*|2\/)\b/i },
+            { token: "support.function", regex: /\b(?:DUP|DROP|SWAP|OVER|ROT|NIP|TUCK|PICK|ROLL|2DUP|2DROP|2SWAP|2OVER|>R|R>|R@|EMIT|CR|SPACE|SPACES|TYPE|KEY|WORDS|SEE|ABORT|QUIT|\.|\.\?|@|!|\+!|C@|C!|2@|2!|CELL\+|CELLS|ALLOT|HERE|CHAR|CHARS)\b/i },
+            { token: ["variable.language", "entity.name.function"], regex: /(\:)\s+(\S+)/ },
+            { token: "variable.language", regex: /\b(?:;|CONSTANT|VARIABLE|CREATE|DOES>|VALUE|TO|USER|MARKER)\b/i }
           ]
         };
       };
