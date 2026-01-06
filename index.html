@@ -4,7 +4,7 @@
   <title>Text Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#272822">
-  <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiVGV4dCBFZGl0b3IiLCJzaG9ydF9uYW1lIjoiRWRpdG9yIiwic3RhcnRfdXJsIjoiLiIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiMyNzI4MjIiLCJ0aGVtZV9jb2xvciI6IiMyNzI4MjIiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sLCUzQ3N2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxOTInIGhlaWdodD0nMTkyJyB2aWV3Qm94PScwIDAgMTkyIDE5Mic%2BJTNDcmVjdCB3aWR0aD0nMTkyJyBoZWlnaHQ9JzE5MicgZmlsbD0nJTIzMjcyODIyJy8%2BJTNDdGV4dCB4PScxMCcgeT0nMTIwJyBmb250LXNpemU9JzEwMCcgZm9udC1mYW1pbHk9J21vbm9zcGFjZScgZmlsbD0nJTIzRjkyNjcyJyUzRTwvdGV4dCUzRSUzQy9zdmclM0UiLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
+  <link rel="manifest" id="manifest-placeholder">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-text.min.js"></script>
@@ -20,6 +20,39 @@
   <span id="status" style="position: absolute; bottom: 10px; right: 10px; color: #aaa; z-index: 1000; font-family: monospace; font-size: 14px;"></span>
   <div id="editor" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0;"></div>
   <script>
+    // Create manifest with file_handlers
+    const manifestData = {
+      "name": "Text Editor",
+      "short_name": "Editor",
+      "start_url": ".",
+      "display": "standalone",
+      "background_color": "#272822",
+      "theme_color": "#272822",
+      "icons": [{
+        "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%23272822'/%3E%3Ctext x='10' y='120' font-size='100' font-family='monospace' fill='%23F92672'%3E%3C/text%3E%3C/svg%3E",
+        "sizes": "192x192",
+        "type": "image/svg+xml"
+      }],
+      "file_handlers": [{
+        "action": "/",
+        "accept": {
+          "text/*": [
+            ".txt", ".text", ".conf", ".def", ".list", ".log", ".in", ".ini",
+            ".js", ".jsx", ".ts", ".tsx", ".json", ".html", ".htm", ".css", 
+            ".scss", ".sass", ".less", ".xml", ".svg", ".md", ".markdown",
+            ".py", ".rb", ".php", ".java", ".c", ".cpp", ".h", ".hpp",
+            ".cs", ".go", ".rs", ".swift", ".kt", ".scala", ".sh", ".bash",
+            ".zsh", ".fish", ".pl", ".lua", ".r", ".sql", ".yaml", ".yml",
+            ".toml", ".cfg", ".fs", ".fth", ".4th", ".forth"
+          ]
+        }
+      }]
+    };
+    
+    const manifestBlob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
+    const manifestURL = URL.createObjectURL(manifestBlob);
+    document.getElementById('manifest-placeholder').href = manifestURL;
+    
     // Register Service Worker
     if ('serviceWorker' in navigator) {
       const swCode = `
