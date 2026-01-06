@@ -13,15 +13,12 @@
     #editor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
     #status { position: absolute; bottom: 10px; right: 10px; color: #75715e; z-index: 1000; font-family: monospace; font-size: 14px; pointer-events: none; }
     
+    /* Cursor Fixes */
     .ace_editor .ace_cursor { border-left: 2px solid #f8f8f2 !important; }
     .normal-mode .ace_cursor { background-color: rgba(248, 248, 242, 0.5) !important; border: none !important; opacity: 0.8; }
-    
-    /* Proxy needed for yy system sync */
-    #clip-proxy { position: absolute; left: -9999px; opacity: 0; }
   </style>
 </head>
 <body>  
-  <textarea id="clip-proxy"></textarea>
   <button id="open-file-button" style="display: none;">Open</button>
   <button id="save-file-button" style="display: none;">Save</button>
   <span id="status"></span>
@@ -30,15 +27,15 @@
   <script>
     let fileHandle = null;
     let originalFileName = "";
+    const supportsFileSystemAccess = 'showOpenFilePicker' in window;
 
-    // 1. Setup Editor
     var editor = ace.edit("editor");
     editor.setTheme("ace/theme/monokai");
     editor.renderer.setShowGutter(false); 
     editor.setOption("showPrintMargin", false);
     editor.setFontSize(18);
-
-    // 2. Define Forth Mode Internally (Ensures Opening Files Doesn't Crash)
+    
+    // Forth Syntax
     ace.define("ace/mode/forth", ["require","exports","module","ace/lib/oop","ace/mode/text","ace/mode/text_highlight_rules"], function(require, exports, module) {
       var oop = require("../lib/oop");
       var TextMode = require("./text").Mode;
@@ -49,10 +46,14 @@
             { token: "comment.line", regex: /\\.*$/ },
             { token: "comment.block", regex: /\(.*?\)/ },
             { token: "string.quoted", regex: /\b\."\s+[^"]*"/ },
-            { token: "keyword.control", regex: /\b(?:IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|EXIT|CASE|OF|ENDCASE)\b/i },
-            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|AND|OR|XOR|=|<>|<|>)\b/i },
-            { token: "support.function", regex: /\b(?:DUP|DROP|SWAP|OVER|ROT|EMIT|CR|SPACE|TYPE|KEY|WORDS|SEE|@|!|C@|C!|CELLS|ALLOT)\b/i },
-            { token: ["variable.language", "text", "entity.name.function"], regex: /(^|\s)(:)(\s+\S+)/ }
+            { token: "string.quoted", regex: /s"\s+[^"]*"/i },
+            { token: "constant.numeric", regex: /\b-?\d+\.?\d*\b/ },
+            { token: "constant.numeric", regex: /\$[0-9A-Fa-f]+/ },
+            { token: "keyword.control", regex: /\b(?:IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|\+LOOP|LEAVE|EXIT|AGAIN|RECURSE|CASE|OF|ENDOF|ENDCASE)\b/i },
+            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|\/MOD|\*\/MOD|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|<=|>=|0=|0<|0>|1\+|1-|2\*|2\/)\b/i },
+            { token: "support.function", regex: /\b(?:DUP|DROP|SWAP|OVER|ROT|NIP|TUCK|PICK|ROLL|2DUP|2DROP|2SWAP|2OVER|>R|R>|R@|EMIT|CR|SPACE|SPACES|TYPE|KEY|WORDS|SEE|ABORT|QUIT|\.|\.\?|@|!|\+!|C@|C!|2@|2!|CELL\+|CELLS|ALLOT|HERE|CHAR|CHARS)\b/i },
+            { token: ["variable.language", "text", "entity.name.function"], regex: /(^|\s)(:)(\s+\S+)/ },
+            { token: "variable.language", regex: /\b(?:;|CONSTANT|VARIABLE|CREATE|DOES>|VALUE|TO|USER|MARKER)\b/i }
           ]
         };
       };
@@ -62,74 +63,64 @@
       exports.Mode = Mode;
     });
 
-    // 3. Vim Commands & Clipboard Sync
+    // VIM & CLIPBOARD SYNC
     editor.setKeyboardHandler("ace/keyboard/vim", function() {
       ace.config.loadModule("ace/keyboard/vim", function(module) {
         var VimApi = module.CodeMirror.Vim;
 
-        // yy -> Windows Clipboard
+        // Sync Yank (y, yy, yw, dd) to system clipboard
         module.CodeMirror.on(VimApi, "yank", function(data) {
           if (data.text) {
-            const proxy = document.getElementById('clip-proxy');
-            proxy.value = data.text;
-            proxy.select();
-            document.execCommand('copy');
+            navigator.clipboard.writeText(data.text).catch(()=>{});
           }
         });
 
-        // p -> Pull from System
+        // Use 'p' to pull from system clipboard without breaking internal p
         VimApi.defineAction("pasteFromSystem", function(cm) {
           navigator.clipboard.readText().then(text => {
             if (text) {
               const pos = editor.getCursorPosition();
               editor.session.insert(pos, text);
             }
-          });
+          }).catch(()=>{});
         });
         VimApi.mapCommand("p", "action", "pasteFromSystem", {}, { context: "normal" });
 
-        // RESTORED: :e and :o
+        // EX Commands
+        VimApi.defineEx("write", "w", function() { document.getElementById("save-file-button").click(); });
+        VimApi.defineEx("quit", "q", function() { window.close(); });
+        VimApi.defineEx("wq", "wq", function() { 
+            document.getElementById("save-file-button").click();
+            setTimeout(() => { window.close(); }, 150);
+        });
         VimApi.defineEx("edit", "e", function() { document.getElementById("open-file-button").click(); });
         VimApi.defineEx("open", "o", function() { document.getElementById("open-file-button").click(); });
-        VimApi.defineEx("write", "w", function() { document.getElementById("save-file-button").click(); });
-        VimApi.defineEx("wq", "wq", function() { 
-          document.getElementById("save-file-button").click();
-          setTimeout(() => { window.close(); }, 150);
-        });
-        VimApi.defineEx("quit", "q", function() { window.close(); });
-        
+
         VimApi.map("ZZ", ":wq<CR>", "normal");
         VimApi.map("ZQ", ":q<CR>", "normal");
       });
     });
 
-    // 4. File Core Logic
+    // Shared File Handler
     async function handleFileEntry(handleOrFile) {
-      try {
-        let file;
-        if (handleOrFile.getFile) {
-          fileHandle = handleOrFile;
-          file = await fileHandle.getFile();
-        } else {
-          file = handleOrFile;
-          fileHandle = null; 
-        }
-        const contents = await file.text();
-        editor.getSession().setValue(contents);
-        originalFileName = file.name;
-        
-        const mode = getModeFromFilename(file.name);
-        editor.getSession().setMode("ace/mode/" + mode);
-        document.getElementById("status").textContent = originalFileName;
-        editor.focus();
-      } catch (err) {
-        console.error("Failed to load file", err);
+      let file;
+      if (handleOrFile.getFile) {
+        fileHandle = handleOrFile;
+        file = await fileHandle.getFile();
+      } else {
+        file = handleOrFile;
+        fileHandle = null; 
       }
+      const contents = await file.text();
+      editor.getSession().setValue(contents);
+      originalFileName = file.name;
+      editor.getSession().setMode("ace/mode/" + getModeFromFilename(file.name));
+      document.getElementById("status").textContent = originalFileName;
+      setTimeout(() => { editor.focus(); }, 10);
     }
 
-    // Event Listeners
     document.getElementById("open-file-button").addEventListener("click", async () => {
-      if ('showOpenFilePicker' in window) {
+      if (supportsFileSystemAccess) {
         try {
           const [handle] = await window.showOpenFilePicker();
           handleFileEntry(handle);
@@ -142,19 +133,44 @@
       }
     });
 
-    document.getElementById("save-file-button").addEventListener("click", async () => {
-      if (!fileHandle) {
-        const blob = new Blob([editor.getValue()], {type: "text/plain"});
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = originalFileName || "file.txt";
-        a.click();
-        return;
+    const container = document.getElementById("editor");
+    container.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+    container.addEventListener("drop", async e => {
+      e.preventDefault();
+      const item = e.dataTransfer.items[0];
+      if (item && item.kind === 'file') {
+        if (typeof item.getAsFileSystemHandle === 'function') {
+          handleFileEntry(await item.getAsFileSystemHandle());
+        } else {
+          handleFileEntry(e.dataTransfer.files[0]);
+        }
       }
-      const writable = await fileHandle.createWritable();
-      await writable.write(editor.getValue());
-      await writable.close();
-      document.getElementById("status").textContent = "Saved: " + originalFileName;
+    });
+
+    if ('launchQueue' in window) {
+      window.launchQueue.setConsumer(async (launchParams) => {
+        if (launchParams.files && launchParams.files.length > 0) {
+          handleFileEntry(launchParams.files[0]);
+        }
+      });
+    }
+
+    document.getElementById("save-file-button").addEventListener("click", async function() {
+      if (!fileHandle) {
+          if (originalFileName) {
+              const blob = new Blob([editor.getValue()], {type: "text/plain"});
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = originalFileName; a.click();
+          }
+          return;
+      }
+      try {
+        const writable = await fileHandle.createWritable();
+        await writable.write(editor.getValue());
+        await writable.close();
+        document.getElementById("status").textContent = "Saved: " + originalFileName;
+      } catch (e) { console.error(e); }
     });
 
     function getModeFromFilename(filename) {
@@ -163,15 +179,12 @@
       return modes[ext] || "text";
     }
 
-    // Drag and Drop
-    const container = document.getElementById("editor");
-    container.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
-    container.addEventListener("drop", async e => {
-      e.preventDefault();
-      const file = e.dataTransfer.files[0];
-      if (file) handleFileEntry(file);
-    });
-
+    if ('serviceWorker' in navigator) {
+      const sw = `self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));`;
+      const blob = new Blob([sw], {type: 'text/javascript'});
+      navigator.serviceWorker.register(URL.createObjectURL(blob));
+    }
+    
     window.onload = () => { setTimeout(() => editor.focus(), 100); };
   </script>
 </body>
