@@ -202,27 +202,45 @@
       return modes[ext] || "text";
     } 
 
-    // Forth syntax definition
     ace.define("ace/mode/forth", ["require", "exports", "module", "ace/lib/oop", "ace/mode/text", "ace/mode/text_highlight_rules"], function(require, exports, module) {
       var oop = require("../lib/oop");
       var TextMode = require("./text").Mode;
       var TextHighlightRules = require("./text_highlight_rules").TextHighlightRules;
+
       var ForthHighlightRules = function() {
-        this.$rules = { "start": [
-          { token: "comment.line", regex: /\\.*$/ },
-          { token: "comment.block", regex: /\(.*?\)/ },
-          { token: "string.quoted", regex: /\."[^"]*"/ },
-          { token: "constant.numeric", regex: /\b-?\d+\.?\d*\b/ },
-          { token: "keyword.control", regex: /\b(IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|LEAVE|EXIT)\b/i },
-          { token: "keyword.operator", regex: /\b(\+|-|\*|\/|MOD|AND|OR|XOR|LSHIFT|RSHIFT|=|<>|<|>)\b/i },
-          { token: "support.function", regex: /\b(:|;|CONSTANT|VARIABLE|DUP|DROP|SWAP|OVER|ROT|EMIT|CR|SPACE)\b/i }
-        ]};
+        this.$rules = {
+          "start": [
+            { token: "comment.line", regex: /\\.*$/ },
+            { token: "comment.block", regex: /\(.*?\)/ },
+            { token: "string.quoted", regex: /\b\."\s+[^"]*"/ },
+            { token: "constant.numeric", regex: /\b-?\d+\.?\d*\b/ },
+            // Control flow
+            { token: "keyword.control", regex: /\b(?:IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|LEAVE|EXIT|AGAIN)\b/i },
+            // Operators and Math
+            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|AND|OR|XOR|LSHIFT|RSHIFT|=|<>|<|>|1\+|1-|2\*|2\/)\b/i },
+            // Stack and Core functions (The "Function Names")
+            { token: "support.function", regex: /\b(?:DUP|DROP|SWAP|OVER|ROT|NIP|TUCK|PICK|ROLL|EMIT|CR|SPACE|TYPE|KEY|WORDS|SEE|ABORT|QUIT|\.|\.\?|@|!|\+!|C@|C!|CELL\+|CELLS|ALLOT|HERE)\b/i },
+            // Definition keywords
+            { token: "variable.language", regex: /\b(?::|;|CONSTANT|VARIABLE|CREATE|DOES>|VALUE|TO|USER)\b/i }
+          ]
+        };
       };
+
       oop.inherits(ForthHighlightRules, TextHighlightRules);
-      var Mode = function() { this.HighlightRules = ForthHighlightRules; };
+
+      var Mode = function() {
+        this.HighlightRules = ForthHighlightRules;
+        this.$behaviour = this.$defaultBehaviour;
+      };
       oop.inherits(Mode, TextMode);
+
+      (function() {
+        this.type = "text";
+        this.$id = "ace/mode/forth";
+      }).call(Mode.prototype);
+
       exports.Mode = Mode;
-    }); 
+    });
 
     // Keyboard shortcuts
     document.addEventListener("keydown", function(e) {
