@@ -32,6 +32,7 @@
     editor.setTheme("ace/theme/monokai");
     editor.renderer.setShowGutter(false);
     editor.setFontSize(20);
+    editor.focus();
     
     // Set Vim mode and add custom commands
     editor.setKeyboardHandler("ace/keyboard/vim", function() {
@@ -69,6 +70,7 @@
           originalFileName = file.name;
           
           document.getElementById("status").textContent = originalFileName; 
+          editor.focus();
         }
       });
     }
@@ -118,6 +120,7 @@
           editor.getSession().setValue(contents);
           editor.getSession().setMode("ace/mode/" + getModeFromFilename(file.name));
           document.getElementById("status").textContent = originalFileName;
+          editor.focus();
         } catch (err) {
           if (err.name !== 'AbortError') console.error(err);
         }
