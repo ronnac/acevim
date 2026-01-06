@@ -38,6 +38,7 @@
     editor.setFontSize(18);
 
     // 1. Forth Syntax
+   <!-- 
     ace.define("ace/mode/forth", ["require","exports","module","ace/lib/oop","ace/mode/text","ace/mode/text_highlight_rules"], function(require, exports, module) {
       var oop = require("../lib/oop");
       var TextMode = require("./text").Mode;
@@ -64,7 +65,7 @@
       oop.inherits(Mode, TextMode);
       exports.Mode = Mode;
     });
-
+-->
     // 2. VIM & CLIPBOARD SYNC
     editor.setKeyboardHandler("ace/keyboard/vim", function() {
       ace.config.loadModule("ace/keyboard/vim", function(module) {
