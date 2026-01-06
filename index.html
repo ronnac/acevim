@@ -50,8 +50,25 @@
         VimApi.defineEx("open", "o", function(cm, input) {
           document.getElementById("open-file-button").click();
         });
-        VimApi.map("ZZ", ":w<CR>", "normal");
-        VimApi.map("ZQ", "<Esc>", "normal");
+       
+        // Define :q to close the window
+        VimApi.defineEx("quit", "q", function(cm, input) {
+            window.close();
+        });
+
+        // Define :wq to save and then close
+        VimApi.defineEx("writequit", "wq", function(cm, input) {
+            document.getElementById("save-file-button").click();
+            // Small delay to ensure save logic initiates before closing
+            setTimeout(() => { window.close(); }, 100);
+        });
+
+        // Save and close
+        VimApi.map("ZZ", ":wq<CR>", "normal");
+    
+        // quit and close
+        VimApi.map("ZQ", ":q<CR>", "normal");
+        
       });
     }); 
 
