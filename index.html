@@ -25,7 +25,7 @@
     let originalFileName = "";
     const supportsFileSystemAccess = 'showOpenFilePicker' in window;
 
-    // 1. Initialize Ace Editor with Monokai
+    // 1. Initialize Editor
     var editor = ace.edit("editor");
     editor.setTheme("ace/theme/monokai");
     editor.renderer.setShowGutter(true);
@@ -33,12 +33,11 @@
     editor.setFontSize(18);
     editor.focus();
 
-    // 2. Advanced Forth Syntax Definition
+    // 2. Forth Syntax
     ace.define("ace/mode/forth", ["require","exports","module","ace/lib/oop","ace/mode/text","ace/mode/text_highlight_rules"], function(require, exports, module) {
       var oop = require("../lib/oop");
       var TextMode = require("./text").Mode;
       var TextHighlightRules = require("./text_highlight_rules").TextHighlightRules;
-
       var ForthHighlightRules = function() {
         this.$rules = {
           "start": [
@@ -49,7 +48,7 @@
             { token: "constant.numeric", regex: /\b-?\d+\.?\d*\b/ },
             { token: "constant.numeric", regex: /\$[0-9A-Fa-f]+/ },
             { token: "keyword.control", regex: /\b(?:IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|\+LOOP|LEAVE|EXIT|AGAIN|RECURSE|CASE|OF|ENDOF|ENDCASE)\b/i },
-            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|\/MOD|\*\/MOD|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|0=|0<|0>|1\+|1-|2\*|2\/)\b/i },
+            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|\/MOD|\*\/MOD|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|<=|>=|0=|0<|0>|1\+|1-|2\*|2\/)\b/i },
             { token: "support.function", regex: /\b(?:DUP|DROP|SWAP|OVER|ROT|NIP|TUCK|PICK|ROLL|2DUP|2DROP|2SWAP|2OVER|>R|R>|R@|EMIT|CR|SPACE|SPACES|TYPE|KEY|WORDS|SEE|ABORT|QUIT|\.|\.\?|@|!|\+!|C@|C!|2@|2!|CELL\+|CELLS|ALLOT|HERE|CHAR|CHARS)\b/i },
             { token: ["variable.language", "text", "entity.name.function"], regex: /(^|\s)(:)(\s+\S+)/ },
             { token: "variable.language", regex: /\b(?:;|CONSTANT|VARIABLE|CREATE|DOES>|VALUE|TO|USER|MARKER)\b/i }
@@ -62,12 +61,11 @@
       exports.Mode = Mode;
     });
 
-    // 3. Vim Keybindings & Clipboard Sync
+    // 3. Vim Keybindings (Restored :e and :o)
     editor.setKeyboardHandler("ace/keyboard/vim", function() {
       ace.config.loadModule("ace/keyboard/vim", function(module) {
         var VimApi = module.CodeMirror.Vim;
 
-        // Sync Normal Mode Yank (y) to System Clipboard
         editor.on("copy", function(text) {
           if (text) navigator.clipboard.writeText(text);
         });
@@ -78,13 +76,17 @@
             document.getElementById("save-file-button").click();
             setTimeout(() => { window.close(); }, 150);
         });
+        
+        // RESTORED: Open and Edit commands
+        VimApi.defineEx("edit", "e", function() { document.getElementById("open-file-button").click(); });
+        VimApi.defineEx("open", "o", function() { document.getElementById("open-file-button").click(); });
 
         VimApi.map("ZZ", ":wq<CR>", "normal");
         VimApi.map("ZQ", ":q<CR>", "normal");
       });
     });
 
-    // 4. Centralized File Loading
+    // 4. Shared File Handler
     async function handleFileEntry(handleOrFile) {
       let file;
       if (handleOrFile.getFile) {
@@ -94,7 +96,6 @@
         file = handleOrFile;
         fileHandle = null; 
       }
-      
       const contents = await file.text();
       editor.getSession().setValue(contents);
       originalFileName = file.name;
@@ -103,64 +104,21 @@
       editor.focus();
     }
 
-    // 5. Drag and Drop Support
-    const container = document.getElementById("editor");
-    container.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
-    container.addEventListener("drop", async e => {
-      e.preventDefault();
-      const item = e.dataTransfer.items[0];
-      if (item && item.kind === 'file') {
-        if (typeof item.getAsFileSystemHandle === 'function') {
-          const handle = await item.getAsFileSystemHandle();
+    // 5. Native Open Button Logic (Triggered by :e / :o)
+    document.getElementById("open-file-button").addEventListener("click", async () => {
+      if (supportsFileSystemAccess) {
+        try {
+          const [handle] = await window.showOpenFilePicker();
           handleFileEntry(handle);
-        } else {
-          handleFileEntry(e.dataTransfer.files[0]);
-        }
+        } catch (e) {}
+      } else {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.onchange = e => handleFileEntry(e.target.files[0]);
+        input.click();
       }
     });
 
-    // 6. Launch Queue (Open With)
-    if ('launchQueue' in window) {
-      window.launchQueue.setConsumer(async (launchParams) => {
-        if (launchParams.files && launchParams.files.length > 0) {
-          handleFileEntry(launchParams.files[0]);
-        }
-      });
-    }
-
-    // 7. Save Logic
-    document.getElementById("save-file-button").addEventListener("click", async function() {
-      if (!fileHandle) {
-          if (originalFileName) {
-              const blob = new Blob([editor.getValue()], {type: "text/plain"});
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url; a.download = originalFileName; a.click();
-          }
-          return;
-      }
-      try {
-        const writable = await fileHandle.createWritable();
-        await writable.write(editor.getValue());
-        await writable.close();
-        document.getElementById("status").textContent = "Saved: " + originalFileName;
-      } catch (e) { 
-        console.error(e);
-      }
-    });
-
-    function getModeFromFilename(filename) {
-      const ext = filename.split('.').pop().toLowerCase();
-      const modes = { "js":"javascript", "py":"python", "fs":"forth", "fth":"forth", "forth":"forth", "html":"html", "css":"css", "json":"json", "md":"markdown" };
-      return modes[ext] || "text";
-    }
-
-    // PWA Service Worker (Offline Support)
-    if ('serviceWorker' in navigator) {
-      const sw = `self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));`;
-      const blob = new Blob([sw], {type: 'text/javascript'});
-      navigator.serviceWorker.register(URL.createObjectURL(blob));
-    }
-  </script>
-</body>
-</html>
+    // 6. Drag & Drop
+    const container = document.getElementById("editor");
+    container.addEventListener("dragover", e
