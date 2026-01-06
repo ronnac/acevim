@@ -12,8 +12,6 @@
     body { margin: 0; padding: 0; overflow: hidden; background-color: #272822; color: #f8f8f2; }
     #editor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
     #status { position: absolute; bottom: 10px; right: 10px; color: #75715e; z-index: 1000; font-family: monospace; font-size: 14px; pointer-events: none; }
-    
-    /* Cursor Visibility Fixes */
     .ace_editor .ace_cursor { border-left: 2px solid #f8f8f2 !important; }
     .normal-mode .ace_cursor { background-color: rgba(248, 248, 242, 0.5) !important; border: none !important; opacity: 0.8; }
   </style>
@@ -65,28 +63,31 @@
       exports.Mode = Mode;
     });
 
-    // 2. VIM & CLIPBOARD SYNC (Stable Implementation)
+    // 2. VIM & SYSTEM CLIPBOARD (Bridges the internal registers)
     editor.setKeyboardHandler("ace/keyboard/vim", function() {
       ace.config.loadModule("ace/keyboard/vim", function(module) {
         var VimApi = module.CodeMirror.Vim;
 
-        // YANK Sync (Vim -> System)
-        editor.on("copy", function(text) {
-          if (text) navigator.clipboard.writeText(text);
-        });
+        // --- YANK FIX (yy, yw, d, etc.) ---
+        // Overriding the internal register 'pushText' ensures system-wide sync
+        const originalPushText = VimApi.getRegisterController().pushText;
+        VimApi.getRegisterController().pushText = function(registerName, operator, text, linewise, blockwise) {
+            // Push to system clipboard if it's the unnamed register (default) or the '*' register
+            if (text && (registerName === '"' || registerName === '*' || registerName === '+')) {
+                navigator.clipboard.writeText(text).catch(err => console.error("Clipboard write failed", err));
+            }
+            return originalPushText.apply(this, arguments);
+        };
 
-        // PASTE Sync (System -> Vim) 
-        // We define a custom action that pulls from the system clipboard
+        // --- PASTE FIX (p) ---
         VimApi.defineAction("pasteFromSystem", function(cm) {
           navigator.clipboard.readText().then(text => {
             if (text) {
               const pos = editor.getCursorPosition();
               editor.session.insert(pos, text);
             }
-          });
+          }).catch(err => console.error("Clipboard read failed", err));
         });
-
-        // Map 'p' in normal mode to our system paste action
         VimApi.mapCommand("p", "action", "pasteFromSystem", {}, { context: "normal" });
 
         // EX Commands
@@ -104,7 +105,7 @@
       });
     });
 
-    // 3. File Handlers
+    // 3. File Handlers (Drag/Drop/Open With)
     async function handleFileEntry(handleOrFile) {
       let file;
       if (handleOrFile.getFile) {
