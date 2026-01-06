@@ -7,263 +7,36 @@
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-text.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/keybinding-vim.min.js"></script>
   <style>
-    body { margin: 0; padding: 0; overflow: hidden; }
+    body { margin: 0; padding: 0; overflow: hidden; background-color: #272822; color: #f8f8f2; font-family: monospace; }
+    #editor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
+    #status { position: absolute; bottom: 10px; right: 10px; color: #75715e; z-index: 1000; font-size: 14px; pointer-events: none; }
+    #install-button { position: absolute; top: 10px; right: 10px; z-index: 1000; display: none; background: #f92672; color: white; border: none; padding: 8px 12px; cursor: pointer; }
   </style>
 </head>
 <body>  
-  <button id="open-file-button" style="display: none;">Open File</button>
-  <button id="save-file-button" style="display: none;">Save File</button>
-  <button id="install-button" style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: none;">Install App</button>
-  <span id="status" style="position: absolute; bottom: 10px; right: 10px; color: #aaa; z-index: 1000; font-family: monospace; font-size: 14px;"></span>
-  <div id="editor" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0;"></div>
+  <button id="open-file-button" style="display: none;">Open</button>
+  <button id="save-file-button" style="display: none;">Save</button>
+  <button id="install-button">Install AceVim</button>
+  <span id="status"></span>
+  <div id="editor"></div>
 
   <script>
-    // Global state
     let fileHandle = null;
     let originalFileName = "";
-    const supportsFileSystemAccess = 'showOpenFilePicker' in window; 
+    const supportsFileSystemAccess = 'showOpenFilePicker' in window;
 
-    // Initialize Ace Editor
-    var editor = ace.edit("editor"); 
-    editor.getSession().setMode("ace/mode/text");
+    // 1. Initialize Editor with Monokai
+    var editor = ace.edit("editor");
     editor.setTheme("ace/theme/monokai");
-    editor.renderer.setShowGutter(false);
-    editor.setFontSize(20);
+    editor.renderer.setShowGutter(true);
+    editor.setOption("showPrintMargin", false);
+    editor.setFontSize(18);
     editor.focus();
-    
-    // Set Vim mode and add custom commands
-    editor.setKeyboardHandler("ace/keyboard/vim", function() {
-      ace.config.loadModule("ace/keyboard/vim", function(module) {
-        var VimApi = module.CodeMirror.Vim;
-        
-        VimApi.defineEx("write", "w", function(cm, input) {
-          document.getElementById("save-file-button").click();
-        });
-        VimApi.defineEx("wq", "wq", function(cm, input) {
-          document.getElementById("save-file-button").click();
-          setTimeout(() => { window.close(); }, 100);
-        });
-        VimApi.defineEx("edit", "e", function(cm, input) {
-          document.getElementById("open-file-button").click();
-        });
-        VimApi.defineEx("open", "o", function(cm, input) {
-          document.getElementById("open-file-button").click();
-        });
-       
-        VimApi.defineEx("quit", "q", function(cm, input) {
-          window.close();
-        });
 
-        // Save and close
-        VimApi.map("ZZ", ":wq<CR>", "normal");
-        // Quit without save
-        VimApi.map("ZQ", ":q<CR>", "normal");
-      });
-    });
-    
-    // Sync clipboard with system using Ace's events
-    editor.on("copy", function(text) {
-      navigator.clipboard.writeText(text).catch(err => console.error('Clipboard write failed:', err));
-    });
-    
-    editor.on("cut", function(text) {
-      navigator.clipboard.writeText(text).catch(err => console.error('Clipboard write failed:', err));
-    });
-    
-    // Handle paste from system clipboard
-    editor.commands.addCommand({
-      name: "pasteFromClipboard",
-      bindKey: {win: "Ctrl-V", mac: "Cmd-V"},
-      exec: async function(editor) {
-        try {
-          const text = await navigator.clipboard.readText();
-          if (text) {
-            editor.insert(text);
-          }
-        } catch (err) {
-          console.error('Clipboard read failed:', err);
-        }
-      }
-    }); 
-
-    // Handle files opened via Windows "Open With" (Launch Queue)
-    if ('launchQueue' in window) {
-      window.launchQueue.setConsumer(async (launchParams) => {
-        if (launchParams.files && launchParams.files.length > 0) {
-          fileHandle = launchParams.files[0]; 
-          const file = await fileHandle.getFile();
-          const contents = await file.text();
-          
-          editor.getSession().setValue(contents);
-          const mode = getModeFromFilename(file.name);
-          editor.getSession().setMode("ace/mode/" + mode);
-          originalFileName = file.name;
-          
-          document.getElementById("status").textContent = originalFileName; 
-          editor.focus();
-        }
-      });
-    }
-
-    // Register Service Worker for PWA functionality
-    if ('serviceWorker' in navigator) {
-      const swCode = `
-        self.addEventListener('install', (e) => self.skipWaiting());
-        self.addEventListener('activate', (e) => self.clients.claim());
-        self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request)));
-      `;
-      const blob = new Blob([swCode], { type: 'application/javascript' });
-      const swURL = URL.createObjectURL(blob);
-      navigator.serviceWorker.register(swURL);
-    } 
-
-    // PWA Install prompt logic
-    let deferredPrompt;
-    const installButton = document.getElementById('install-button');
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      installButton.style.display = 'block';
-    });
-    installButton.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        deferredPrompt = null;
-        installButton.style.display = 'none';
-      }
-    }); 
-
-    // Double-click for fullscreen
-    document.getElementById("editor").addEventListener("dblclick", function() {
-      var elem = document.documentElement;
-      if (elem.requestFullscreen) {
-        elem.requestFullscreen();
-      } else if (elem.mozRequestFullScreen) {
-        elem.mozRequestFullScreen();
-      } else if (elem.webkitRequestFullscreen) {
-        elem.webkitRequestFullscreen();
-      } else if (elem.msRequestFullscreen) {
-        elem.msRequestFullscreen();
-      }
-    });
-
-    // Drag and drop support
-    document.body.addEventListener("dragover", function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-    
-    document.body.addEventListener("drop", function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      if (e.dataTransfer.files.length > 0) {
-        const file = e.dataTransfer.files[0];
-        const reader = new FileReader();
-        reader.onload = function(event) {
-          editor.getSession().setValue(event.target.result);
-          const mode = getModeFromFilename(file.name);
-          editor.getSession().setMode("ace/mode/" + mode);
-          originalFileName = file.name;
-          fileHandle = null; // Clear file handle since drag-drop doesn't provide one
-          document.getElementById("status").textContent = originalFileName + " (download mode)";
-          editor.focus();
-        };
-        reader.readAsText(file);
-      }
-    });
-
-    // Open File logic
-    document.getElementById("open-file-button").addEventListener("click", async function() {
-      if (supportsFileSystemAccess) {
-        try {
-          const [handle] = await window.showOpenFilePicker({
-            types: [{
-              description: 'Text Files',
-              accept: {'text/*': ['.txt', '.js', '.html', '.css', '.py', '.md', '.json', '.forth']}
-            }]
-          });
-          fileHandle = handle;
-          const file = await fileHandle.getFile();
-          const contents = await file.text();
-          originalFileName = file.name;
-          editor.getSession().setValue(contents);
-          editor.getSession().setMode("ace/mode/" + getModeFromFilename(file.name));
-          document.getElementById("status").textContent = originalFileName;
-          editor.focus();
-        } catch (err) {
-          if (err.name !== 'AbortError') console.error(err);
-        }
-      } else {
-        var fileInput = document.createElement("input");
-        fileInput.type = "file";
-        fileInput.click();
-        fileInput.addEventListener("change", function() {
-          var file = fileInput.files[0];
-          var reader = new FileReader();
-          reader.onload = function(e) {
-            editor.getSession().setValue(e.target.result);
-            originalFileName = file.name;
-            editor.getSession().setMode("ace/mode/" + getModeFromFilename(file.name));
-            document.getElementById("status").textContent = originalFileName + " (download mode)";
-          };
-          reader.readAsText(file);
-        });
-      }
-    }); 
-
-    // Save File logic
-    document.getElementById("save-file-button").addEventListener("click", async function() {
-      if (!originalFileName && !fileHandle) {
-        alert("Please open a file first");
-        return;
-      }
-      
-      var fileContent = editor.getSession().getValue();
-      
-      if (supportsFileSystemAccess && fileHandle) {
-        try {
-          const writable = await fileHandle.createWritable();
-          await writable.write(fileContent);
-          await writable.close();
-          document.getElementById("status").textContent = "Saved: " + originalFileName;
-          setTimeout(() => {
-            document.getElementById("status").textContent = originalFileName;
-          }, 2000);
-        } catch (err) {
-          console.error('Error saving:', err);
-          alert('Save failed: ' + err.message);
-        }
-      } else {
-        var blob = new Blob([fileContent], {type: "text/plain"});
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement("a");
-        a.href = url;
-        a.download = originalFileName;
-        a.click();
-        URL.revokeObjectURL(url);
-        document.getElementById("status").textContent = "Downloaded: " + originalFileName;
-      }
-    }); 
-
-    // Utility: Get mode from filename
-    function getModeFromFilename(filename) {
-      var ext = filename.split('.').pop().toLowerCase();
-      var modes = {
-        "js": "javascript", "html": "html", "css": "css", "py": "python",
-        "json": "json", "md": "markdown", "xml": "xml", "c": "c_cpp",
-        "cpp": "c_cpp", "h": "c_cpp", "hpp": "c_cpp", "java": "java",
-        "php": "php", "rb": "ruby", "sh": "sh", "bash": "sh",
-        "fs": "forth", "fth": "forth", "4th": "forth", "forth": "forth"
-      };
-      return modes[ext] || "text";
-    } 
-
-    // Define Forth syntax highlighting
-    ace.define("ace/mode/forth", ["require", "exports", "module", "ace/lib/oop", "ace/mode/text", "ace/mode/text_highlight_rules"], function(require, exports, module) {
+    // 2. Advanced Forth Syntax Definition
+    ace.define("ace/mode/forth", ["require","exports","module","ace/lib/oop","ace/mode/text","ace/mode/text_highlight_rules"], function(require, exports, module) {
       var oop = require("../lib/oop");
       var TextMode = require("./text").Mode;
       var TextHighlightRules = require("./text_highlight_rules").TextHighlightRules;
@@ -273,45 +46,115 @@
           "start": [
             { token: "comment.line", regex: /\\.*$/ },
             { token: "comment.block", regex: /\(.*?\)/ },
-            { token: "string.quoted", regex: /\."\s+[^"]*"/ },
+            { token: "string.quoted", regex: /\b\."\s+[^"]*"/ },
             { token: "string.quoted", regex: /s"\s+[^"]*"/i },
             { token: "constant.numeric", regex: /\b-?\d+\.?\d*\b/ },
             { token: "constant.numeric", regex: /\$[0-9A-Fa-f]+/ },
             { token: "keyword.control", regex: /\b(?:IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|\+LOOP|LEAVE|EXIT|AGAIN|RECURSE|CASE|OF|ENDOF|ENDCASE)\b/i },
-            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|\/MOD|\*\/MOD|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|<=|>=|0=|0<|0>|1\+|1-|2\*|2\/)\b/i },
+            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|\/MOD|\*\/MOD|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|0=|0<|0>|1\+|1-|2\*|2\/)\b/i },
             { token: "support.function", regex: /\b(?:DUP|DROP|SWAP|OVER|ROT|NIP|TUCK|PICK|ROLL|2DUP|2DROP|2SWAP|2OVER|>R|R>|R@|EMIT|CR|SPACE|SPACES|TYPE|KEY|WORDS|SEE|ABORT|QUIT|\.|\.\?|@|!|\+!|C@|C!|2@|2!|CELL\+|CELLS|ALLOT|HERE|CHAR|CHARS)\b/i },
             { token: ["variable.language", "text", "entity.name.function"], regex: /(^|\s)(:)(\s+\S+)/ },
             { token: "variable.language", regex: /\b(?:;|CONSTANT|VARIABLE|CREATE|DOES>|VALUE|TO|USER|MARKER)\b/i }
           ]
         };
       };
-
       oop.inherits(ForthHighlightRules, TextHighlightRules);
-
-      var Mode = function() {
-        this.HighlightRules = ForthHighlightRules;
-        this.$behaviour = this.$defaultBehaviour;
-      };
+      var Mode = function() { this.HighlightRules = ForthHighlightRules; };
       oop.inherits(Mode, TextMode);
-
-      (function() {
-        this.type = "text";
-        this.$id = "ace/mode/forth";
-      }).call(Mode.prototype);
-
       exports.Mode = Mode;
     });
 
-    // Keyboard shortcuts
-    document.addEventListener("keydown", function(e) {
-      if (e.ctrlKey && e.key === "s") {
-        e.preventDefault();
-        document.getElementById("save-file-button").click();
-      } else if (e.ctrlKey && e.key === "o") {
-        e.preventDefault();
-        document.getElementById("open-file-button").click();
+    // 3. Vim Keybindings & Clipboard Sync
+    editor.setKeyboardHandler("ace/keyboard/vim", function() {
+      ace.config.loadModule("ace/keyboard/vim", function(module) {
+        var VimApi = module.CodeMirror.Vim;
+
+        // Sync Yank (Normal Mode) to System Clipboard
+        editor.on("copy", function(text) {
+          if (text) navigator.clipboard.writeText(text);
+        });
+
+        VimApi.defineEx("write", "w", function() { document.getElementById("save-file-button").click(); });
+        VimApi.defineEx("quit", "q", function() { window.close(); });
+        VimApi.defineEx("wq", "wq", function() { 
+            document.getElementById("save-file-button").click();
+            setTimeout(() => { window.close(); }, 150);
+        });
+
+        VimApi.map("ZZ", ":wq<CR>", "normal");
+        VimApi.map("ZQ", ":q<CR>", "normal");
+      });
+    });
+
+    // 4. Drag and Drop Support
+    const container = document.getElementById("editor");
+    container.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+    container.addEventListener("drop", async e => {
+      e.preventDefault();
+      const item = e.dataTransfer.items[0];
+      if (item && item.kind === 'file') {
+        if (typeof item.getAsFileSystemHandle === 'function') {
+          fileHandle = await item.getAsFileSystemHandle();
+          const file = await fileHandle.getFile();
+          loadFileContent(file);
+        } else {
+          loadFileContent(e.dataTransfer.files[0]);
+        }
       }
-    }); 
+    });
+
+    async function loadFileContent(file) {
+      const contents = await file.text();
+      editor.getSession().setValue(contents);
+      originalFileName = file.name;
+      editor.getSession().setMode("ace/mode/" + getModeFromFilename(file.name));
+      document.getElementById("status").textContent = originalFileName;
+      editor.focus();
+    }
+
+    // 5. Launch Queue (Open With)
+    if ('launchQueue' in window) {
+      window.launchQueue.setConsumer(async (launchParams) => {
+        if (launchParams.files && launchParams.files.length > 0) {
+          fileHandle = launchParams.files[0];
+          const file = await fileHandle.getFile();
+          loadFileContent(file);
+        }
+      });
+    }
+
+    // 6. Save Function
+    document.getElementById("save-file-button").addEventListener("click", async function() {
+      if (!fileHandle) return;
+      try {
+        const writable = await fileHandle.createWritable();
+        await writable.write(editor.getValue());
+        await writable.close();
+        document.getElementById("status").textContent = "Saved: " + originalFileName;
+      } catch (e) { console.error("Save failed:", e); }
+    });
+
+    function getModeFromFilename(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      const modes = { "js":"javascript", "py":"python", "fs":"forth", "fth":"forth", "forth":"forth", "html":"html" };
+      return modes[ext] || "text";
+    }
+
+    // PWA Service Worker & Install Logic
+    if ('serviceWorker' in navigator) {
+      const sw = `self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));`;
+      const blob = new Blob([sw], {type: 'text/javascript'});
+      navigator.serviceWorker.register(URL.createObjectURL(blob));
+    }
+
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault(); deferredPrompt = e;
+      document.getElementById('install-button').style.display = 'block';
+    });
+    document.getElementById('install-button').addEventListener('click', () => {
+      if(deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; }
+    });
   </script>
 </body>
 </html>
