@@ -9,10 +9,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/keybinding-vim.min.js"></script>
   <style>
-    body { margin: 0; padding: 0; overflow: hidden; background-color: #272822; color: #f8f8f2; font-family: monospace; }
+    body { margin: 0; padding: 0; overflow: hidden; background-color: #272822; color: #f8f8f2; }
     #editor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
-    #status { position: absolute; bottom: 10px; right: 10px; color: #75715e; z-index: 1000; font-size: 14px; pointer-events: none; }
-    #install-button { position: absolute; top: 10px; right: 10px; z-index: 1000; display: none; background: #f92672; color: white; border: none; padding: 8px 12px; cursor: pointer; }
+    #status { position: absolute; bottom: 10px; right: 10px; color: #75715e; z-index: 1000; font-family: monospace; font-size: 14px; pointer-events: none; }
+    #install-button { position: absolute; top: 10px; right: 10px; z-index: 1000; display: none; background: #f92672; color: white; border: none; padding: 8px 12px; cursor: pointer; font-family: monospace; font-weight: bold; }
   </style>
 </head>
 <body>  
@@ -27,7 +27,7 @@
     let originalFileName = "";
     const supportsFileSystemAccess = 'showOpenFilePicker' in window;
 
-    // 1. Initialize Editor with Monokai
+    // 1. Initialize Ace Editor with Monokai
     var editor = ace.edit("editor");
     editor.setTheme("ace/theme/monokai");
     editor.renderer.setShowGutter(true);
@@ -69,11 +69,12 @@
       ace.config.loadModule("ace/keyboard/vim", function(module) {
         var VimApi = module.CodeMirror.Vim;
 
-        // Sync Yank (Normal Mode) to System Clipboard
+        // Sync Normal Mode Yank (y) to System Clipboard
         editor.on("copy", function(text) {
           if (text) navigator.clipboard.writeText(text);
         });
 
+        // Custom Ex Commands
         VimApi.defineEx("write", "w", function() { document.getElementById("save-file-button").click(); });
         VimApi.defineEx("quit", "q", function() { window.close(); });
         VimApi.defineEx("wq", "wq", function() { 
@@ -81,29 +82,23 @@
             setTimeout(() => { window.close(); }, 150);
         });
 
+        // Shortcut Mappings
         VimApi.map("ZZ", ":wq<CR>", "normal");
         VimApi.map("ZQ", ":q<CR>", "normal");
       });
     });
 
-    // 4. Drag and Drop Support
-    const container = document.getElementById("editor");
-    container.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
-    container.addEventListener("drop", async e => {
-      e.preventDefault();
-      const item = e.dataTransfer.items[0];
-      if (item && item.kind === 'file') {
-        if (typeof item.getAsFileSystemHandle === 'function') {
-          fileHandle = await item.getAsFileSystemHandle();
-          const file = await fileHandle.getFile();
-          loadFileContent(file);
-        } else {
-          loadFileContent(e.dataTransfer.files[0]);
-        }
+    // 4. Centralized File Loading
+    async function handleFileEntry(handleOrFile) {
+      let file;
+      if (handleOrFile.getFile) {
+        fileHandle = handleOrFile;
+        file = await fileHandle.getFile();
+      } else {
+        file = handleOrFile;
+        fileHandle = null; 
       }
-    });
-
-    async function loadFileContent(file) {
+      
       const contents = await file.text();
       editor.getSession().setValue(contents);
       originalFileName = file.name;
@@ -112,31 +107,57 @@
       editor.focus();
     }
 
-    // 5. Launch Queue (Open With)
+    // 5. Drag and Drop Support
+    const container = document.getElementById("editor");
+    container.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+    container.addEventListener("drop", async e => {
+      e.preventDefault();
+      const item = e.dataTransfer.items[0];
+      if (item && item.kind === 'file') {
+        if (typeof item.getAsFileSystemHandle === 'function') {
+          const handle = await item.getAsFileSystemHandle();
+          handleFileEntry(handle);
+        } else {
+          handleFileEntry(e.dataTransfer.files[0]);
+        }
+      }
+    });
+
+    // 6. Launch Queue (Open With)
     if ('launchQueue' in window) {
       window.launchQueue.setConsumer(async (launchParams) => {
         if (launchParams.files && launchParams.files.length > 0) {
-          fileHandle = launchParams.files[0];
-          const file = await fileHandle.getFile();
-          loadFileContent(file);
+          handleFileEntry(launchParams.files[0]);
         }
       });
     }
 
-    // 6. Save Function
+    // 7. Save Logic (Supports :w, ZZ, :wq)
     document.getElementById("save-file-button").addEventListener("click", async function() {
-      if (!fileHandle) return;
+      if (!fileHandle) {
+          if (originalFileName) {
+              // Fallback download if no system handle exists
+              const blob = new Blob([editor.getValue()], {type: "text/plain"});
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = originalFileName; a.click();
+          }
+          return;
+      }
       try {
         const writable = await fileHandle.createWritable();
         await writable.write(editor.getValue());
         await writable.close();
         document.getElementById("status").textContent = "Saved: " + originalFileName;
-      } catch (e) { console.error("Save failed:", e); }
+      } catch (e) { 
+        console.error(e);
+        alert("Save failed. Make sure you granted permission."); 
+      }
     });
 
     function getModeFromFilename(filename) {
       const ext = filename.split('.').pop().toLowerCase();
-      const modes = { "js":"javascript", "py":"python", "fs":"forth", "fth":"forth", "forth":"forth", "html":"html" };
+      const modes = { "js":"javascript", "py":"python", "fs":"forth", "fth":"forth", "forth":"forth", "html":"html", "css":"css", "json":"json", "md":"markdown" };
       return modes[ext] || "text";
     }
 
