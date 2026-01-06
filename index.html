@@ -56,12 +56,15 @@
     const manifestBlob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
     const manifestURL = URL.createObjectURL(manifestBlob);
     <!-- document.getElementById('manifest-placeholder').href = manifestURL; --> 
+
+    let fileHandle = null; // Use this globally 
+    let originalFileName = "";
       
     // Handle files opened via file_handlers
     if ('launchQueue' in window) {
       window.launchQueue.setConsumer(async (launchParams) => {
         if (launchParams.files && launchParams.files.length > 0) {
-          const fileHandle = launchParams.files[0];
+          fileHandle = launchParams.files[0];
           const file = await fileHandle.getFile();
           const contents = await file.text();
           
@@ -69,7 +72,6 @@
           const mode = getModeFromFilename(file.name);
           editor.getSession().setMode("ace/mode/" + mode);
           originalFileName = file.name;
-          window.fileHandle = fileHandle; // Store for saving
           
           document.getElementById("status").textContent = originalFileName;
         }
