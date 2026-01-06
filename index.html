@@ -24,10 +24,10 @@
     // Global state
     let fileHandle = null;
     let originalFileName = "";
-    const supportsFileSystemAccess = 'showOpenFilePicker' in window; [cite: 21]
+    const supportsFileSystemAccess = 'showOpenFilePicker' in window; 
 
     // Initialize Ace Editor
-    var editor = ace.edit("editor"); [cite: 18]
+    var editor = ace.edit("editor"); 
     editor.getSession().setMode("ace/mode/text");
     editor.setTheme("ace/theme/monokai");
     editor.renderer.setShowGutter(false);
@@ -52,14 +52,14 @@
         VimApi.map("ZZ", ":w<CR>", "normal");
         VimApi.map("ZQ", "<Esc>", "normal");
       });
-    }); [cite: 18, 19, 20]
+    }); 
 
     // FIX: Handle files opened via Windows "Open With" (Launch Queue)
     if ('launchQueue' in window) {
       window.launchQueue.setConsumer(async (launchParams) => {
         if (launchParams.files && launchParams.files.length > 0) {
           // Store the handle globally so the Save button can use it
-          fileHandle = launchParams.files[0]; [cite: 7]
+          fileHandle = launchParams.files[0]; 
           const file = await fileHandle.getFile();
           const contents = await file.text();
           
@@ -68,7 +68,7 @@
           editor.getSession().setMode("ace/mode/" + mode);
           originalFileName = file.name;
           
-          document.getElementById("status").textContent = originalFileName; [cite: 8]
+          document.getElementById("status").textContent = originalFileName; 
         }
       });
     }
@@ -83,7 +83,7 @@
       const blob = new Blob([swCode], { type: 'application/javascript' });
       const swURL = URL.createObjectURL(blob);
       navigator.serviceWorker.register(swURL);
-    } [cite: 9, 10, 11, 12, 13]
+    } 
 
     // PWA Install prompt logic
     let deferredPrompt;
@@ -99,7 +99,7 @@
         deferredPrompt = null;
         installButton.style.display = 'none';
       }
-    }); [cite: 15, 16]
+    }); 
 
     // Open File logic
     document.getElementById("open-file-button").addEventListener("click", async function() {
@@ -138,7 +138,7 @@
           reader.readAsText(file);
         });
       }
-    }); [cite: 40, 41, 42, 43, 44, 45]
+    }); 
 
     // Save File logic (Optimized for FileSystemAccess)
     document.getElementById("save-file-button").addEventListener("click", async function() {
@@ -169,7 +169,7 @@
         a.download = originalFileName;
         a.click();
       }
-    }); [cite: 46, 47, 48, 49]
+    }); 
 
     // Utility: Get mode from filename
     function getModeFromFilename(filename) {
@@ -180,7 +180,7 @@
         "4th": "forth", "forth": "forth"
       };
       return modes[ext] || "text";
-    } [cite: 28, 29, 30, 31]
+    } 
 
     // Forth syntax definition
     ace.define("ace/mode/forth", ["require", "exports", "module", "ace/lib/oop", "ace/mode/text", "ace/mode/text_highlight_rules"], function(require, exports, module) {
@@ -202,7 +202,7 @@
       var Mode = function() { this.HighlightRules = ForthHighlightRules; };
       oop.inherits(Mode, TextMode);
       exports.Mode = Mode;
-    }); [cite: 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]
+    }); 
 
     // Keyboard shortcuts
     document.addEventListener("keydown", function(e) {
@@ -213,7 +213,7 @@
         e.preventDefault();
         document.getElementById("open-file-button").click();
       }
-    }); [cite: 23]
+    }); 
   </script>
 </body>
 </html>
