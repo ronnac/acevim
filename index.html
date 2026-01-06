@@ -280,7 +280,7 @@
             { token: "keyword.control", regex: /\b(?:IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|\+LOOP|LEAVE|EXIT|AGAIN|RECURSE|CASE|OF|ENDOF|ENDCASE)\b/i },
             { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|\/MOD|\*\/MOD|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|<=|>=|0=|0<|0>|1\+|1-|2\*|2\/)\b/i },
             { token: "support.function", regex: /\b(?:DUP|DROP|SWAP|OVER|ROT|NIP|TUCK|PICK|ROLL|2DUP|2DROP|2SWAP|2OVER|>R|R>|R@|EMIT|CR|SPACE|SPACES|TYPE|KEY|WORDS|SEE|ABORT|QUIT|\.|\.\?|@|!|\+!|C@|C!|2@|2!|CELL\+|CELLS|ALLOT|HERE|CHAR|CHARS)\b/i },
-            { token: ["variable.language", "entity.name.function"], regex: /(\:)\s+(\S+)/ },
+            { token: ["variable.language", "text", "entity.name.function"], regex: /(^|\s)(:)(\s+\S+)/ },
             { token: "variable.language", regex: /\b(?:;|CONSTANT|VARIABLE|CREATE|DOES>|VALUE|TO|USER|MARKER)\b/i }
           ]
         };
