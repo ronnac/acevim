@@ -55,8 +55,8 @@
     
     const manifestBlob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
     const manifestURL = URL.createObjectURL(manifestBlob);
-    document.getElementById('manifest-placeholder').href = manifestURL;
-    
+    <!-- document.getElementById('manifest-placeholder').href = manifestURL; --
+   > 
     // Handle files opened via file_handlers
     if ('launchQueue' in window) {
       window.launchQueue.setConsumer(async (launchParams) => {
