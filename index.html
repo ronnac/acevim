@@ -12,6 +12,17 @@
     body { margin: 0; padding: 0; overflow: hidden; background-color: #272822; color: #f8f8f2; }
     #editor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
     #status { position: absolute; bottom: 10px; right: 10px; color: #75715e; z-index: 1000; font-family: monospace; font-size: 14px; pointer-events: none; }
+    
+    /* CURSOR FIX: Ensures the Vim cursor is visible in Monokai theme */
+    .ace_editor .ace_cursor {
+      border-left: 2px solid #f8f8f2 !important;
+    }
+    /* Vim Block Cursor (Normal Mode) */
+    .normal-mode .ace_cursor {
+      background-color: rgba(248, 248, 242, 0.5) !important;
+      border: none !important;
+      opacity: 0.8;
+    }
   </style>
 </head>
 <body>  
@@ -25,20 +36,23 @@
     let originalFileName = "";
     const supportsFileSystemAccess = 'showOpenFilePicker' in window;
 
-    // 1. Initialize Ace Editor with Monokai
+    // 1. Initialize Editor
     var editor = ace.edit("editor");
     editor.setTheme("ace/theme/monokai");
-    editor.renderer.setShowGutter(true);
+    
+    // REMOVED LINE NUMBERS:
+    editor.renderer.setShowGutter(false); 
+    
     editor.setOption("showPrintMargin", false);
     editor.setFontSize(18);
-    editor.focus();
+    
+    setTimeout(() => { editor.focus(); }, 100);
 
-    // 2. Advanced Forth Syntax Definition
+    // 2. Forth Syntax Definition
     ace.define("ace/mode/forth", ["require","exports","module","ace/lib/oop","ace/mode/text","ace/mode/text_highlight_rules"], function(require, exports, module) {
       var oop = require("../lib/oop");
       var TextMode = require("./text").Mode;
       var TextHighlightRules = require("./text_highlight_rules").TextHighlightRules;
-
       var ForthHighlightRules = function() {
         this.$rules = {
           "start": [
@@ -49,7 +63,7 @@
             { token: "constant.numeric", regex: /\b-?\d+\.?\d*\b/ },
             { token: "constant.numeric", regex: /\$[0-9A-Fa-f]+/ },
             { token: "keyword.control", regex: /\b(?:IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|\+LOOP|LEAVE|EXIT|AGAIN|RECURSE|CASE|OF|ENDOF|ENDCASE)\b/i },
-            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|\/MOD|\*\/MOD|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|0=|0<|0>|1\+|1-|2\*|2\/)\b/i },
+            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|\/MOD|\*\/MOD|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|<=|>=|0=|0<|0>|1\+|1-|2\*|2\/)\b/i },
             { token: "support.function", regex: /\b(?:DUP|DROP|SWAP|OVER|ROT|NIP|TUCK|PICK|ROLL|2DUP|2DROP|2SWAP|2OVER|>R|R>|R@|EMIT|CR|SPACE|SPACES|TYPE|KEY|WORDS|SEE|ABORT|QUIT|\.|\.\?|@|!|\+!|C@|C!|2@|2!|CELL\+|CELLS|ALLOT|HERE|CHAR|CHARS)\b/i },
             { token: ["variable.language", "text", "entity.name.function"], regex: /(^|\s)(:)(\s+\S+)/ },
             { token: "variable.language", regex: /\b(?:;|CONSTANT|VARIABLE|CREATE|DOES>|VALUE|TO|USER|MARKER)\b/i }
@@ -67,7 +81,6 @@
       ace.config.loadModule("ace/keyboard/vim", function(module) {
         var VimApi = module.CodeMirror.Vim;
 
-        // Sync Normal Mode Yank (y) to System Clipboard
         editor.on("copy", function(text) {
           if (text) navigator.clipboard.writeText(text);
         });
@@ -78,13 +91,16 @@
             document.getElementById("save-file-button").click();
             setTimeout(() => { window.close(); }, 150);
         });
+        
+        VimApi.defineEx("edit", "e", function() { document.getElementById("open-file-button").click(); });
+        VimApi.defineEx("open", "o", function() { document.getElementById("open-file-button").click(); });
 
         VimApi.map("ZZ", ":wq<CR>", "normal");
         VimApi.map("ZQ", ":q<CR>", "normal");
       });
     });
 
-    // 4. Centralized File Loading
+    // 4. Shared File Handler
     async function handleFileEntry(handleOrFile) {
       let file;
       if (handleOrFile.getFile) {
@@ -94,16 +110,30 @@
         file = handleOrFile;
         fileHandle = null; 
       }
-      
       const contents = await file.text();
       editor.getSession().setValue(contents);
       originalFileName = file.name;
       editor.getSession().setMode("ace/mode/" + getModeFromFilename(file.name));
       document.getElementById("status").textContent = originalFileName;
-      editor.focus();
+      setTimeout(() => { editor.focus(); }, 10);
     }
 
-    // 5. Drag and Drop Support
+    // 5. Open Button Logic
+    document.getElementById("open-file-button").addEventListener("click", async () => {
+      if (supportsFileSystemAccess) {
+        try {
+          const [handle] = await window.showOpenFilePicker();
+          handleFileEntry(handle);
+        } catch (e) {}
+      } else {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.onchange = e => handleFileEntry(e.target.files[0]);
+        input.click();
+      }
+    });
+
+    // 6. Drag & Drop Support
     const container = document.getElementById("editor");
     container.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
     container.addEventListener("drop", async e => {
@@ -111,15 +141,14 @@
       const item = e.dataTransfer.items[0];
       if (item && item.kind === 'file') {
         if (typeof item.getAsFileSystemHandle === 'function') {
-          const handle = await item.getAsFileSystemHandle();
-          handleFileEntry(handle);
+          handleFileEntry(await item.getAsFileSystemHandle());
         } else {
           handleFileEntry(e.dataTransfer.files[0]);
         }
       }
     });
 
-    // 6. Launch Queue (Open With)
+    // 7. Launch Queue (Open With)
     if ('launchQueue' in window) {
       window.launchQueue.setConsumer(async (launchParams) => {
         if (launchParams.files && launchParams.files.length > 0) {
@@ -128,7 +157,7 @@
       });
     }
 
-    // 7. Save Logic
+    // 8. Save Logic
     document.getElementById("save-file-button").addEventListener("click", async function() {
       if (!fileHandle) {
           if (originalFileName) {
@@ -144,9 +173,7 @@
         await writable.write(editor.getValue());
         await writable.close();
         document.getElementById("status").textContent = "Saved: " + originalFileName;
-      } catch (e) { 
-        console.error(e);
-      }
+      } catch (e) { console.error(e); }
     });
 
     function getModeFromFilename(filename) {
@@ -155,7 +182,6 @@
       return modes[ext] || "text";
     }
 
-    // PWA Service Worker (Offline Support)
     if ('serviceWorker' in navigator) {
       const sw = `self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));`;
       const blob = new Blob([sw], {type: 'text/javascript'});
