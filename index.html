@@ -12,13 +12,15 @@
     body { margin: 0; padding: 0; overflow: hidden; background-color: #272822; color: #f8f8f2; }
     #editor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
     #status { position: absolute; bottom: 10px; right: 10px; color: #75715e; z-index: 1000; font-family: monospace; font-size: 14px; pointer-events: none; }
-    
-    /* Cursor Fixes */
+    /* Cursor Fix */
     .ace_editor .ace_cursor { border-left: 2px solid #f8f8f2 !important; }
     .normal-mode .ace_cursor { background-color: rgba(248, 248, 242, 0.5) !important; border: none !important; opacity: 0.8; }
+    /* Hidden Proxy for Clipboard */
+    #clip-proxy { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; }
   </style>
 </head>
 <body>  
+  <textarea id="clip-proxy"></textarea>
   <button id="open-file-button" style="display: none;">Open</button>
   <button id="save-file-button" style="display: none;">Save</button>
   <span id="status"></span>
@@ -34,8 +36,8 @@
     editor.renderer.setShowGutter(false); 
     editor.setOption("showPrintMargin", false);
     editor.setFontSize(18);
-    
-    // Forth Syntax
+
+    // 1. Forth Syntax
     ace.define("ace/mode/forth", ["require","exports","module","ace/lib/oop","ace/mode/text","ace/mode/text_highlight_rules"], function(require, exports, module) {
       var oop = require("../lib/oop");
       var TextMode = require("./text").Mode;
@@ -63,19 +65,26 @@
       exports.Mode = Mode;
     });
 
-    // VIM & CLIPBOARD SYNC
+    // 2. VIM & CLIPBOARD SYNC
     editor.setKeyboardHandler("ace/keyboard/vim", function() {
       ace.config.loadModule("ace/keyboard/vim", function(module) {
         var VimApi = module.CodeMirror.Vim;
 
-        // Sync Yank (y, yy, yw, dd) to system clipboard
+        // FORCE YANK TO SYSTEM (yy, yw, etc)
         module.CodeMirror.on(VimApi, "yank", function(data) {
           if (data.text) {
-            navigator.clipboard.writeText(data.text).catch(()=>{});
+            const proxy = document.getElementById('clip-proxy');
+            proxy.value = data.text;
+            proxy.select();
+            try {
+              document.execCommand('copy'); // Fallback for yy to Windows Clipboard
+            } catch (err) {
+              navigator.clipboard.writeText(data.text);
+            }
           }
         });
 
-        // Use 'p' to pull from system clipboard without breaking internal p
+        // SYSTEM PASTE (p)
         VimApi.defineAction("pasteFromSystem", function(cm) {
           navigator.clipboard.readText().then(text => {
             if (text) {
@@ -86,7 +95,7 @@
         });
         VimApi.mapCommand("p", "action", "pasteFromSystem", {}, { context: "normal" });
 
-        // EX Commands
+        // EX Commands (Restored :e and :o)
         VimApi.defineEx("write", "w", function() { document.getElementById("save-file-button").click(); });
         VimApi.defineEx("quit", "q", function() { window.close(); });
         VimApi.defineEx("wq", "wq", function() { 
@@ -101,7 +110,7 @@
       });
     });
 
-    // Shared File Handler
+    // 3. File Loading logic
     async function handleFileEntry(handleOrFile) {
       let file;
       if (handleOrFile.getFile) {
@@ -133,6 +142,7 @@
       }
     });
 
+    // Drag & Drop
     const container = document.getElementById("editor");
     container.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
     container.addEventListener("drop", async e => {
@@ -147,14 +157,7 @@
       }
     });
 
-    if ('launchQueue' in window) {
-      window.launchQueue.setConsumer(async (launchParams) => {
-        if (launchParams.files && launchParams.files.length > 0) {
-          handleFileEntry(launchParams.files[0]);
-        }
-      });
-    }
-
+    // Save Logic
     document.getElementById("save-file-button").addEventListener("click", async function() {
       if (!fileHandle) {
           if (originalFileName) {
@@ -179,12 +182,6 @@
       return modes[ext] || "text";
     }
 
-    if ('serviceWorker' in navigator) {
-      const sw = `self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));`;
-      const blob = new Blob([sw], {type: 'text/javascript'});
-      navigator.serviceWorker.register(URL.createObjectURL(blob));
-    }
-    
     window.onload = () => { setTimeout(() => editor.focus(), 100); };
   </script>
 </body>
