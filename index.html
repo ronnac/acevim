@@ -57,7 +57,7 @@
         });
 
         // Define :wq to save and then close
-        VimApi.defineEx("writequit", "wq", function(cm, input) {
+        VimApi.defineEx("wq", "wq", function(cm, input) {
             document.getElementById("save-file-button").click();
             // Small delay to ensure save logic initiates before closing
             setTimeout(() => { window.close(); }, 100);
