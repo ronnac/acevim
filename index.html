@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>AceVim</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#272822">
@@ -8,6 +9,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/keybinding-vim.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-forth.min.js"></script>
+  
   <style>
     body { margin: 0; padding: 0; overflow: hidden; background-color: #272822; color: #f8f8f2; }
     #editor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
@@ -29,64 +32,36 @@
 
     var editor = ace.edit("editor");
     editor.setTheme("ace/theme/monokai");
-    editor.renderer.setShowGutter(false); 
+    editor.renderer.setShowGutter(true); 
     editor.setOption("showPrintMargin", false);
     editor.setFontSize(18);
     
+    // Initialize Vim mode
+    editor.setKeyboardHandler("ace/keyboard/vim");
+    
     setTimeout(() => { editor.focus(); }, 100);
 
-    // 1. Forth Syntax
-    ace.define("ace/mode/forth", ["require","exports","module","ace/lib/oop","ace/mode/text","ace/mode/text_highlight_rules"], function(require, exports, module) {
-      var oop = require("../lib/oop");
-      var TextMode = require("./text").Mode;
-      var TextHighlightRules = require("./text_highlight_rules").TextHighlightRules;
-      var ForthHighlightRules = function() {
-        this.$rules = {
-          "start": [
-            { token: "comment.line", regex: /\\.*$/ },
-            { token: "comment.block", regex: /\(.*?\)/ },
-            { token: "string.quoted", regex: /\b\."\s+[^"]*"/ },
-            { token: "string.quoted", regex: /s"\s+[^"]*"/i },
-            { token: "constant.numeric", regex: /\b-?\d+\.?\d*\b/ },
-            { token: "constant.numeric", regex: /\$[0-9A-Fa-f]+/ },
-            { token: "keyword.control", regex: /\b(?:IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|\+LOOP|LEAVE|EXIT|AGAIN|RECURSE|CASE|OF|ENDOF|ENDCASE)\b/i },
-            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|\/MOD|\*\/MOD|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|<=|>=|0=|0<|0>|1\+|1-|2\*|2\/)\b/i },
-            { token: "support.function", regex: /\b(?:DUP|DROP|SWAP|OVER|ROT|NIP|TUCK|PICK|ROLL|2DUP|2DROP|2SWAP|2OVER|>R|R>|R@|EMIT|CR|SPACE|SPACES|TYPE|KEY|WORDS|SEE|ABORT|QUIT|\.|\.\?|@|!|\+!|C@|C!|2@|2!|CELL\+|CELLS|ALLOT|HERE|CHAR|CHARS)\b/i },
-            { token: ["variable.language", "text", "entity.name.function"], regex: /(^|\s)(:)(\s+\S+)/ },
-            { token: "variable.language", regex: /\b(?:;|CONSTANT|VARIABLE|CREATE|DOES>|VALUE|TO|USER|MARKER)\b/i }
-          ]
-        };
-      };
-      oop.inherits(ForthHighlightRules, TextHighlightRules);
-      var Mode = function() { this.HighlightRules = ForthHighlightRules; };
-      oop.inherits(Mode, TextMode);
-      exports.Mode = Mode;
-    });
-
-    // 2. VIM & SYSTEM CLIPBOARD (Bridges the internal registers)
-    editor.setKeyboardHandler("ace/keyboard/vim", function() {
-      ace.config.loadModule("ace/keyboard/vim", function(module) {
+    // 1. VIM & SYSTEM CLIPBOARD SYNC
+    ace.config.loadModule("ace/keyboard/vim", function(module) {
         var VimApi = module.CodeMirror.Vim;
 
-        // --- YANK FIX (yy, yw, d, etc.) ---
-        // Overriding the internal register 'pushText' ensures system-wide sync
-        const originalPushText = VimApi.getRegisterController().pushText;
-        VimApi.getRegisterController().pushText = function(registerName, operator, text, linewise, blockwise) {
-            // Push to system clipboard if it's the unnamed register (default) or the '*' register
-            if (text && (registerName === '"' || registerName === '*' || registerName === '+')) {
-                navigator.clipboard.writeText(text).catch(err => console.error("Clipboard write failed", err));
+        // Sync Yank (yy, yw, etc.) to System Clipboard
+        var rc = VimApi.getRegisterController();
+        var originalPushText = rc.pushText;
+        rc.pushText = function(registerName, operator, text, linewise, blockwise) {
+            if (text && (!registerName || registerName === '"' || registerName === '*' || registerName === '+')) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).catch(err => console.error("Clipboard write failed", err));
+                }
             }
             return originalPushText.apply(this, arguments);
         };
 
-        // --- PASTE FIX (p) ---
+        // Sync Paste (p) from System Clipboard
         VimApi.defineAction("pasteFromSystem", function(cm) {
-          navigator.clipboard.readText().then(text => {
-            if (text) {
-              const pos = editor.getCursorPosition();
-              editor.session.insert(pos, text);
-            }
-          }).catch(err => console.error("Clipboard read failed", err));
+            navigator.clipboard.readText().then(text => {
+                if (text) { editor.insert(text); }
+            }).catch(err => console.error("Clipboard read failed", err));
         });
         VimApi.mapCommand("p", "action", "pasteFromSystem", {}, { context: "normal" });
 
@@ -102,10 +77,9 @@
 
         VimApi.map("ZZ", ":wq<CR>", "normal");
         VimApi.map("ZQ", ":q<CR>", "normal");
-      });
     });
 
-    // 3. File Handlers (Drag/Drop/Open With)
+    // 2. FILE MANAGEMENT
     async function handleFileEntry(handleOrFile) {
       let file;
       if (handleOrFile.getFile) {
@@ -118,7 +92,11 @@
       const contents = await file.text();
       editor.getSession().setValue(contents);
       originalFileName = file.name;
-      editor.getSession().setMode("ace/mode/" + getModeFromFilename(file.name));
+      
+      // Set mode using built-in Ace logic
+      const mode = getModeFromFilename(file.name);
+      editor.getSession().setMode("ace/mode/" + mode);
+      
       document.getElementById("status").textContent = originalFileName;
       setTimeout(() => { editor.focus(); }, 10);
     }
@@ -179,7 +157,11 @@
 
     function getModeFromFilename(filename) {
       const ext = filename.split('.').pop().toLowerCase();
-      const modes = { "js":"javascript", "py":"python", "fs":"forth", "fth":"forth", "forth":"forth", "html":"html", "css":"css", "json":"json", "md":"markdown" };
+      const modes = { 
+          "js":"javascript", "py":"python", "fs":"forth", 
+          "fth":"forth", "forth":"forth", "html":"html", 
+          "css":"css", "json":"json", "md":"markdown" 
+      };
       return modes[ext] || "text";
     }
 
