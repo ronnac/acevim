@@ -4,8 +4,7 @@
   <title>AceVim</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#272822">
-  <!-- link rel="manifest" id="manifest-placeholder" -->
-  <link rel="manifest" href="manifest.json"
+  <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-text.min.js"></script>
@@ -20,113 +19,15 @@
   <button id="install-button" style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: none;">Install App</button>
   <span id="status" style="position: absolute; bottom: 10px; right: 10px; color: #aaa; z-index: 1000; font-family: monospace; font-size: 14px;"></span>
   <div id="editor" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0;"></div>
+
   <script>
-    // Create manifest with file_handlers
-    const manifestData = {
-      "name": "AceVim",
-      "short_name": "AceVim",
-      "start_url": ".",
-      "display": "standalone",
-      "background_color": "#272822",
-      "theme_color": "#272822",
-      "icons": [{
-        "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%23272822'/%3E%3Ctext x='10' y='120' font-size='100' font-family='monospace' fill='%23F92672'%3E%3C/text%3E%3C/svg%3E",
-        "sizes": "192x192",
-        "type": "image/svg+xml"
-      }],
-      "launch_handler": {
-        "client_mode": "navigate-existing"
-      },
-      "file_handlers": [{
-        "action": "./",
-        "accept": {
-          "text/*": [
-            ".txt", ".text", ".conf", ".def", ".list", ".log", ".in", ".ini",
-            ".js", ".jsx", ".ts", ".tsx", ".json", ".html", ".htm", ".css", 
-            ".scss", ".sass", ".less", ".xml", ".svg", ".md", ".markdown",
-            ".py", ".rb", ".php", ".java", ".c", ".cpp", ".h", ".hpp",
-            ".cs", ".go", ".rs", ".swift", ".kt", ".scala", ".sh", ".bash",
-            ".zsh", ".fish", ".pl", ".lua", ".r", ".sql", ".yaml", ".yml",
-            ".toml", ".cfg", ".fs", ".fth", ".4th", ".forth"
-          ]
-        }
-      }]
-    };
-    
-    const manifestBlob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
-    const manifestURL = URL.createObjectURL(manifestBlob);
-    <!-- document.getElementById('manifest-placeholder').href = manifestURL; --> 
-
-    let fileHandle = null; // Use this globally 
+    // Global state
+    let fileHandle = null;
     let originalFileName = "";
-      
-    // Handle files opened via file_handlers
-    if ('launchQueue' in window) {
-      window.launchQueue.setConsumer(async (launchParams) => {
-        if (launchParams.files && launchParams.files.length > 0) {
-          fileHandle = launchParams.files[0];
-          const file = await fileHandle.getFile();
-          const contents = await file.text();
-          
-          editor.getSession().setValue(contents);
-          const mode = getModeFromFilename(file.name);
-          editor.getSession().setMode("ace/mode/" + mode);
-          originalFileName = file.name;
-          
-          document.getElementById("status").textContent = originalFileName;
-        }
-      });
-    }
-    
-    // Register Service Worker
-    if ('serviceWorker' in navigator) {
-      const swCode = `
-        self.addEventListener('install', (e) => {
-          self.skipWaiting();
-        });
-        self.addEventListener('activate', (e) => {
-          self.clients.claim();
-        });
-        self.addEventListener('fetch', (e) => {
-          e.respondWith(fetch(e.request));
-        });
-      `;
-      const blob = new Blob([swCode], { type: 'application/javascript' });
-      const swURL = URL.createObjectURL(blob);
-      
-      navigator.serviceWorker.register(swURL).then(() => {
-        console.log('Service Worker registered');
-      }).catch((err) => {
-        console.error('Service Worker registration failed:', err);
-      });
-    }
+    const supportsFileSystemAccess = 'showOpenFilePicker' in window; [cite: 21]
 
-    // PWA Install prompt
-    let deferredPrompt;
-    const installButton = document.getElementById('install-button');
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      installButton.style.display = 'block';
-    });
-
-    installButton.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response: ${outcome}`);
-        deferredPrompt = null;
-        installButton.style.display = 'none';
-      }
-    });
-
-    window.addEventListener('appinstalled', () => {
-      console.log('PWA installed');
-      installButton.style.display = 'none';
-    });
-
-    var editor = ace.edit("editor");
+    // Initialize Ace Editor
+    var editor = ace.edit("editor"); [cite: 18]
     editor.getSession().setMode("ace/mode/text");
     editor.setTheme("ace/theme/monokai");
     editor.renderer.setShowGutter(false);
@@ -148,189 +49,80 @@
         VimApi.defineEx("open", "o", function(cm, input) {
           document.getElementById("open-file-button").click();
         });
-        
-        // Add ZZ (save and continue) and ZQ (quit without save) key mappings
         VimApi.map("ZZ", ":w<CR>", "normal");
         VimApi.map("ZQ", "<Esc>", "normal");
       });
-    });
-    
-    let fileHandle = null;
-    let originalFileName = "";
-    
-    // Check if File System Access API is supported
-    const supportsFileSystemAccess = 'showOpenFilePicker' in window;
-    
-    if (!supportsFileSystemAccess) {
-      document.getElementById("status").textContent = "File System Access API not supported (will download instead)";
-    }
-    
-    document.addEventListener("keydown", function(e) {
-      if (e.ctrlKey && e.key === "s") {
-        document.getElementById("save-file-button").click();
-        e.preventDefault();
-      } else if (e.ctrlKey && e.key === "o") {
-        document.getElementById("open-file-button").click();
-        e.preventDefault();
-      }
-    });
-    
-    document.getElementById("editor").addEventListener("dblclick", function() {
-      var elem = document.documentElement;
-      if (elem.requestFullscreen) {
-        elem.requestFullscreen();
-      } else if (elem.mozRequestFullScreen) {
-        elem.mozRequestFullScreen();
-      } else if (elem.webkitRequestFullscreen) {
-        elem.webkitRequestFullscreen();
-      } else if (elem.msRequestFullscreen) {
-        elem.msRequestFullscreen();
-      }
-    });
-    
-    // Add drag and drop support
-    document.body.addEventListener("dragover", function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-    
-    document.body.addEventListener("drop", function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      if (e.dataTransfer.files.length > 0) {
-        const file = e.dataTransfer.files[0];
-        const reader = new FileReader();
-        reader.onload = function(event) {
-          editor.getSession().setValue(event.target.result);
+    }); [cite: 18, 19, 20]
+
+    // FIX: Handle files opened via Windows "Open With" (Launch Queue)
+    if ('launchQueue' in window) {
+      window.launchQueue.setConsumer(async (launchParams) => {
+        if (launchParams.files && launchParams.files.length > 0) {
+          // Store the handle globally so the Save button can use it
+          fileHandle = launchParams.files[0]; [cite: 7]
+          const file = await fileHandle.getFile();
+          const contents = await file.text();
+          
+          editor.getSession().setValue(contents);
           const mode = getModeFromFilename(file.name);
           editor.getSession().setMode("ace/mode/" + mode);
           originalFileName = file.name;
-          fileHandle = null; // Clear file handle since drag-drop doesn't provide one
-          document.getElementById("status").textContent = originalFileName + " (download mode)";
-        };
-        reader.readAsText(file);
-      }
-    });
-    
-    function getModeFromFilename(filename) {
-      var ext = filename.split('.').pop().toLowerCase();
-      var modes = {
-        "js": "javascript",
-        "html": "html",
-        "css": "css",
-        "php": "php",
-        "java": "java",
-        "py": "python",
-        "json": "json",
-        "xml": "xml",
-        "md": "markdown",
-        "c": "c_cpp",
-        "cpp": "c_cpp",
-        "sh": "sh",
-        "fs": "forth",
-        "fth": "forth",
-        "4th": "forth",
-        "forth": "forth"
-      };
-      return modes[ext] || "text";
+          
+          document.getElementById("status").textContent = originalFileName; [cite: 8]
+        }
+      });
     }
-    
-    // Define Forth syntax highlighting
-    ace.define("ace/mode/forth", ["require", "exports", "module", "ace/lib/oop", "ace/mode/text", "ace/mode/text_highlight_rules"], function(require, exports, module) {
-      var oop = require("../lib/oop");
-      var TextMode = require("./text").Mode;
-      var TextHighlightRules = require("./text_highlight_rules").TextHighlightRules;
-      
-      var ForthHighlightRules = function() {
-        this.$rules = {
-          "start": [
-            {
-              token: "comment.line",
-              regex: /\\.*$/
-            },
-            {
-              token: "comment.block",
-              regex: /\(.*?\)/
-            },
-            {
-              token: "string.quoted",
-              regex: /\."[^"]*"/
-            },
-            {
-              token: "string.quoted",
-              regex: /s"[^"]*"/i
-            },
-            {
-              token: "constant.numeric",
-              regex: /\b-?\d+\.?\d*\b/
-            },
-            {
-              token: "constant.numeric",
-              regex: /\$[0-9A-Fa-f]+/
-            },
-            {
-              token: "keyword.control",
-              regex: /\b(IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|\+LOOP|LEAVE|EXIT|RECURSE|CASE|OF|ENDOF|ENDCASE)\b/i
-            },
-            {
-              token: "keyword.operator",
-              regex: /\b(\+|-|\*|\/|MOD|\/MOD|\*\/|ABS|NEGATE|MIN|MAX|AND|OR|XOR|NOT|LSHIFT|RSHIFT|=|<>|<|>|<=|>=|0=|0<|0>)\b/i
-            },
-            {
-              token: "support.function",
-              regex: /\b(:|;|CONSTANT|VARIABLE|CREATE|DOES>|ALLOT|,|!|@|C!|C@|\+!|2!|2@|DUP|DROP|SWAP|OVER|ROT|PICK|ROLL|>R|R>|R@|2DUP|2DROP|2SWAP|2OVER)\b/i
-            },
-            {
-              token: "support.function",
-              regex: /\b(EMIT|CR|SPACE|SPACES|TYPE|\.|\.\"|KEY|WORD|ACCEPT|FIND|EXECUTE|EVALUATE)\b/i
-            },
-            {
-              token: "entity.name.function",
-              regex: /:\s+\S+/
-            }
-          ]
-        };
-      };
-      
-      oop.inherits(ForthHighlightRules, TextHighlightRules);
-      
-      var Mode = function() {
-        this.HighlightRules = ForthHighlightRules;
-      };
-      
-      oop.inherits(Mode, TextMode);
-      
-      exports.Mode = Mode;
+
+    // Register Service Worker for PWA functionality
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        self.addEventListener('install', (e) => self.skipWaiting());
+        self.addEventListener('activate', (e) => self.clients.claim());
+        self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request)));
+      `;
+      const blob = new Blob([swCode], { type: 'application/javascript' });
+      const swURL = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swURL);
+    } [cite: 9, 10, 11, 12, 13]
+
+    // PWA Install prompt logic
+    let deferredPrompt;
+    const installButton = document.getElementById('install-button');
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installButton.style.display = 'block';
     });
-    
+    installButton.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt = null;
+        installButton.style.display = 'none';
+      }
+    }); [cite: 15, 16]
+
+    // Open File logic
     document.getElementById("open-file-button").addEventListener("click", async function() {
       if (supportsFileSystemAccess) {
         try {
-          [fileHandle] = await window.showOpenFilePicker({
+          const [handle] = await window.showOpenFilePicker({
             types: [{
               description: 'Text Files',
-              accept: {'text/*': ['.txt', '.js', '.html', '.css', '.py', '.md', '.json', '.xml']}
+              accept: {'text/*': ['.txt', '.js', '.html', '.css', '.py', '.md', '.json', '.forth']}
             }]
           });
-          
+          fileHandle = handle; // Store globally
           const file = await fileHandle.getFile();
           const contents = await file.text();
           originalFileName = file.name;
-          
           editor.getSession().setValue(contents);
-          var mode = getModeFromFilename(file.name);
-          editor.getSession().setMode("ace/mode/" + mode);
-          
+          editor.getSession().setMode("ace/mode/" + getModeFromFilename(file.name));
           document.getElementById("status").textContent = originalFileName;
         } catch (err) {
-          if (err.name !== 'AbortError') {
-            console.error('Error opening file:', err);
-            alert('Error opening file: ' + err.message);
-          }
+          if (err.name !== 'AbortError') console.error(err);
         }
       } else {
-        // Fallback to old file input method
+        // Fallback for non-supported browsers
         var fileInput = document.createElement("input");
         fileInput.type = "file";
         fileInput.click();
@@ -339,16 +131,16 @@
           var reader = new FileReader();
           reader.onload = function(e) {
             editor.getSession().setValue(e.target.result);
-            var mode = getModeFromFilename(file.name);
-            editor.getSession().setMode("ace/mode/" + mode);
             originalFileName = file.name;
+            editor.getSession().setMode("ace/mode/" + getModeFromFilename(file.name));
             document.getElementById("status").textContent = originalFileName + " (download mode)";
           };
           reader.readAsText(file);
         });
       }
-    });
-    
+    }); [cite: 40, 41, 42, 43, 44, 45]
+
+    // Save File logic (Optimized for FileSystemAccess)
     document.getElementById("save-file-button").addEventListener("click", async function() {
       if (!originalFileName && !fileHandle) {
         alert("Please open a file first");
@@ -357,20 +149,16 @@
       
       var fileContent = editor.getSession().getValue();
       
+      // If we have a fileHandle (from Open Picker OR Launch Queue), use it
       if (supportsFileSystemAccess && fileHandle) {
         try {
-          // Save to the original file
           const writable = await fileHandle.createWritable();
           await writable.write(fileContent);
           await writable.close();
-          
           document.getElementById("status").textContent = "Saved: " + originalFileName;
-          setTimeout(() => {
-            document.getElementById("status").textContent = originalFileName;
-          }, 2000);
         } catch (err) {
-          console.error('Error saving file:', err);
-          alert('Error saving file: ' + err.message);
+          console.error('Error saving:', err);
+          alert('Save failed: ' + err.message);
         }
       } else {
         // Fallback to download
@@ -380,11 +168,52 @@
         a.href = url;
         a.download = originalFileName;
         a.click();
-        URL.revokeObjectURL(url);
-        
-        document.getElementById("status").textContent = "Downloaded: " + originalFileName;
       }
-    });
+    }); [cite: 46, 47, 48, 49]
+
+    // Utility: Get mode from filename
+    function getModeFromFilename(filename) {
+      var ext = filename.split('.').pop().toLowerCase();
+      var modes = {
+        "js": "javascript", "html": "html", "css": "css", "py": "python",
+        "json": "json", "md": "markdown", "fs": "forth", "fth": "forth",
+        "4th": "forth", "forth": "forth"
+      };
+      return modes[ext] || "text";
+    } [cite: 28, 29, 30, 31]
+
+    // Forth syntax definition
+    ace.define("ace/mode/forth", ["require", "exports", "module", "ace/lib/oop", "ace/mode/text", "ace/mode/text_highlight_rules"], function(require, exports, module) {
+      var oop = require("../lib/oop");
+      var TextMode = require("./text").Mode;
+      var TextHighlightRules = require("./text_highlight_rules").TextHighlightRules;
+      var ForthHighlightRules = function() {
+        this.$rules = { "start": [
+          { token: "comment.line", regex: /\\.*$/ },
+          { token: "comment.block", regex: /\(.*?\)/ },
+          { token: "string.quoted", regex: /\."[^"]*"/ },
+          { token: "constant.numeric", regex: /\b-?\d+\.?\d*\b/ },
+          { token: "keyword.control", regex: /\b(IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|LEAVE|EXIT)\b/i },
+          { token: "keyword.operator", regex: /\b(\+|-|\*|\/|MOD|AND|OR|XOR|LSHIFT|RSHIFT|=|<>|<|>)\b/i },
+          { token: "support.function", regex: /\b(:|;|CONSTANT|VARIABLE|DUP|DROP|SWAP|OVER|ROT|EMIT|CR|SPACE)\b/i }
+        ]};
+      };
+      oop.inherits(ForthHighlightRules, TextHighlightRules);
+      var Mode = function() { this.HighlightRules = ForthHighlightRules; };
+      oop.inherits(Mode, TextMode);
+      exports.Mode = Mode;
+    }); [cite: 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]
+
+    // Keyboard shortcuts
+    document.addEventListener("keydown", function(e) {
+      if (e.ctrlKey && e.key === "s") {
+        e.preventDefault();
+        document.getElementById("save-file-button").click();
+      } else if (e.ctrlKey && e.key === "o") {
+        e.preventDefault();
+        document.getElementById("open-file-button").click();
+      }
+    }); [cite: 23]
   </script>
 </body>
 </html>
