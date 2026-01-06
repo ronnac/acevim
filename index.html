@@ -38,24 +38,9 @@
     editor.setKeyboardHandler("ace/keyboard/vim", function() {
       ace.config.loadModule("ace/keyboard/vim", function(module) {
         var VimApi = module.CodeMirror.Vim;
-        // --- SYSTEM CLIPBOARD SYNC ---
-        // This overrides the internal yank/paste behavior to use the browser Clipboard API
-        VimApi.defineOption("clipboard", "unnamed", "string", ["unnamed"], function(value, cm) {
-            if (value === "unnamed") {
-                // Override the internal 'put' (paste) function
-                const originalPut = VimApi.handleEx; // Placeholder for context
-            
-                // We hook into the 'y' and 'p' operations
-                // Note: Modern browsers require a user gesture or focus for clipboard access
-            }
-        });
-
-        // Simple implementation for AceVim:
-        // Sync 'yank' to clipboard
-        document.addEventListener('copy', (e) => {
-            const text = editor.getCopyText();
-            if (text) navigator.clipboard.writeText(text);
-        });
+        
+        // Sync with system clipboard
+        editor.on("copy", function(text) { navigator.clipboard.writeText(text); });
 
         // To properly sync 'p' (paste), we override the Ace Paste command
         editor.on("paste", function(e) {
