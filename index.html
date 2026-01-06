@@ -13,6 +13,7 @@
     #editor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
     #status { position: absolute; bottom: 10px; right: 10px; color: #75715e; z-index: 1000; font-family: monospace; font-size: 14px; pointer-events: none; }
     
+    /* Cursor Visibility Fixes */
     .ace_editor .ace_cursor { border-left: 2px solid #f8f8f2 !important; }
     .normal-mode .ace_cursor { background-color: rgba(248, 248, 242, 0.5) !important; border: none !important; opacity: 0.8; }
   </style>
@@ -64,31 +65,29 @@
       exports.Mode = Mode;
     });
 
-    // 2. VIM & CLIPBOARD SYNC (The Fix)
+    // 2. VIM & CLIPBOARD SYNC (Stable Implementation)
     editor.setKeyboardHandler("ace/keyboard/vim", function() {
       ace.config.loadModule("ace/keyboard/vim", function(module) {
         var VimApi = module.CodeMirror.Vim;
 
-        // YANK: Vim -> System
+        // YANK Sync (Vim -> System)
         editor.on("copy", function(text) {
           if (text) navigator.clipboard.writeText(text);
         });
 
-        // PASTE: System -> Vim (Intercepting the 'p' key in Normal mode)
-        const originalHandleKey = editor.keyBinding.onCommandKey;
-        editor.keyBinding.onCommandKey = function(e, hashId, keyCode) {
-            // If 'p' is pressed in normal mode
-            if (keyCode === 80 && !editor.state.cm.state.vim.insertMode) {
-                navigator.clipboard.readText().then(text => {
-                    if (text) {
-                        const pos = editor.getCursorPosition();
-                        editor.session.insert(pos, text);
-                    }
-                });
-                return; 
+        // PASTE Sync (System -> Vim) 
+        // We define a custom action that pulls from the system clipboard
+        VimApi.defineAction("pasteFromSystem", function(cm) {
+          navigator.clipboard.readText().then(text => {
+            if (text) {
+              const pos = editor.getCursorPosition();
+              editor.session.insert(pos, text);
             }
-            return originalHandleKey.apply(this, arguments);
-        };
+          });
+        });
+
+        // Map 'p' in normal mode to our system paste action
+        VimApi.mapCommand("p", "action", "pasteFromSystem", {}, { context: "normal" });
 
         // EX Commands
         VimApi.defineEx("write", "w", function() { document.getElementById("save-file-button").click(); });
@@ -118,3 +117,76 @@
       const contents = await file.text();
       editor.getSession().setValue(contents);
       originalFileName = file.name;
+      editor.getSession().setMode("ace/mode/" + getModeFromFilename(file.name));
+      document.getElementById("status").textContent = originalFileName;
+      setTimeout(() => { editor.focus(); }, 10);
+    }
+
+    document.getElementById("open-file-button").addEventListener("click", async () => {
+      if (supportsFileSystemAccess) {
+        try {
+          const [handle] = await window.showOpenFilePicker();
+          handleFileEntry(handle);
+        } catch (e) {}
+      } else {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.onchange = e => handleFileEntry(e.target.files[0]);
+        input.click();
+      }
+    });
+
+    const container = document.getElementById("editor");
+    container.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+    container.addEventListener("drop", async e => {
+      e.preventDefault();
+      const item = e.dataTransfer.items[0];
+      if (item && item.kind === 'file') {
+        if (typeof item.getAsFileSystemHandle === 'function') {
+          handleFileEntry(await item.getAsFileSystemHandle());
+        } else {
+          handleFileEntry(e.dataTransfer.files[0]);
+        }
+      }
+    });
+
+    if ('launchQueue' in window) {
+      window.launchQueue.setConsumer(async (launchParams) => {
+        if (launchParams.files && launchParams.files.length > 0) {
+          handleFileEntry(launchParams.files[0]);
+        }
+      });
+    }
+
+    document.getElementById("save-file-button").addEventListener("click", async function() {
+      if (!fileHandle) {
+          if (originalFileName) {
+              const blob = new Blob([editor.getValue()], {type: "text/plain"});
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = originalFileName; a.click();
+          }
+          return;
+      }
+      try {
+        const writable = await fileHandle.createWritable();
+        await writable.write(editor.getValue());
+        await writable.close();
+        document.getElementById("status").textContent = "Saved: " + originalFileName;
+      } catch (e) { console.error(e); }
+    });
+
+    function getModeFromFilename(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      const modes = { "js":"javascript", "py":"python", "fs":"forth", "fth":"forth", "forth":"forth", "html":"html", "css":"css", "json":"json", "md":"markdown" };
+      return modes[ext] || "text";
+    }
+
+    if ('serviceWorker' in navigator) {
+      const sw = `self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));`;
+      const blob = new Blob([sw], {type: 'text/javascript'});
+      navigator.serviceWorker.register(URL.createObjectURL(blob));
+    }
+  </script>
+</body>
+</html>
