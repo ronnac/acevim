@@ -7,23 +7,21 @@
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-forth.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/keybinding-vim.min.js"></script>
   <style>
     body { margin: 0; padding: 0; overflow: hidden; background-color: #272822; color: #f8f8f2; }
     #editor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
     #status { position: absolute; bottom: 10px; right: 10px; color: #75715e; z-index: 1000; font-family: monospace; font-size: 14px; pointer-events: none; }
     
-    /* Cursor Visibility */
     .ace_editor .ace_cursor { border-left: 2px solid #f8f8f2 !important; }
     .normal-mode .ace_cursor { background-color: rgba(248, 248, 242, 0.5) !important; border: none !important; opacity: 0.8; }
     
-    /* Hidden Proxy for System Clipboard Sync */
-    #clip-proxy { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
+    /* Proxy needed for yy system sync */
+    #clip-proxy { position: absolute; left: -9999px; opacity: 0; }
   </style>
 </head>
 <body>  
-  <textarea id="clip-proxy" aria-hidden="true"></textarea>
+  <textarea id="clip-proxy"></textarea>
   <button id="open-file-button" style="display: none;">Open</button>
   <button id="save-file-button" style="display: none;">Save</button>
   <span id="status"></span>
@@ -32,83 +30,106 @@
   <script>
     let fileHandle = null;
     let originalFileName = "";
-    const supportsFileSystemAccess = 'showOpenFilePicker' in window;
 
-    // 1. Initialize Editor
+    // 1. Setup Editor
     var editor = ace.edit("editor");
     editor.setTheme("ace/theme/monokai");
     editor.renderer.setShowGutter(false); 
     editor.setOption("showPrintMargin", false);
     editor.setFontSize(18);
 
-    // 2. VIM & CLIPBOARD SYNC
+    // 2. Define Forth Mode Internally (Ensures Opening Files Doesn't Crash)
+    ace.define("ace/mode/forth", ["require","exports","module","ace/lib/oop","ace/mode/text","ace/mode/text_highlight_rules"], function(require, exports, module) {
+      var oop = require("../lib/oop");
+      var TextMode = require("./text").Mode;
+      var TextHighlightRules = require("./text_highlight_rules").TextHighlightRules;
+      var ForthHighlightRules = function() {
+        this.$rules = {
+          "start": [
+            { token: "comment.line", regex: /\\.*$/ },
+            { token: "comment.block", regex: /\(.*?\)/ },
+            { token: "string.quoted", regex: /\b\."\s+[^"]*"/ },
+            { token: "keyword.control", regex: /\b(?:IF|THEN|ELSE|BEGIN|UNTIL|WHILE|REPEAT|DO|LOOP|EXIT|CASE|OF|ENDCASE)\b/i },
+            { token: "keyword.operator", regex: /\b(?:\+|-|\*|\/|MOD|AND|OR|XOR|=|<>|<|>)\b/i },
+            { token: "support.function", regex: /\b(?:DUP|DROP|SWAP|OVER|ROT|EMIT|CR|SPACE|TYPE|KEY|WORDS|SEE|@|!|C@|C!|CELLS|ALLOT)\b/i },
+            { token: ["variable.language", "text", "entity.name.function"], regex: /(^|\s)(:)(\s+\S+)/ }
+          ]
+        };
+      };
+      oop.inherits(ForthHighlightRules, TextHighlightRules);
+      var Mode = function() { this.HighlightRules = ForthHighlightRules; };
+      oop.inherits(Mode, TextMode);
+      exports.Mode = Mode;
+    });
+
+    // 3. Vim Commands & Clipboard Sync
     editor.setKeyboardHandler("ace/keyboard/vim", function() {
       ace.config.loadModule("ace/keyboard/vim", function(module) {
         var VimApi = module.CodeMirror.Vim;
 
-        // FIXED YANK (yy, yw, etc.)
+        // yy -> Windows Clipboard
         module.CodeMirror.on(VimApi, "yank", function(data) {
           if (data.text) {
             const proxy = document.getElementById('clip-proxy');
             proxy.value = data.text;
             proxy.select();
-            document.execCommand('copy'); 
-            // Also try modern API as backup
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(data.text).catch(()=>{});
-            }
+            document.execCommand('copy');
           }
         });
 
-        // FIXED PASTE (p)
+        // p -> Pull from System
         VimApi.defineAction("pasteFromSystem", function(cm) {
           navigator.clipboard.readText().then(text => {
             if (text) {
               const pos = editor.getCursorPosition();
               editor.session.insert(pos, text);
             }
-          }).catch(()=>{});
+          });
         });
         VimApi.mapCommand("p", "action", "pasteFromSystem", {}, { context: "normal" });
 
-        // EX Commands (:w, :q, :wq, :e, :o)
-        VimApi.defineEx("write", "w", function() { document.getElementById("save-file-button").click(); });
-        VimApi.defineEx("quit", "q", function() { window.close(); });
-        VimApi.defineEx("wq", "wq", function() { 
-            document.getElementById("save-file-button").click();
-            setTimeout(() => { window.close(); }, 150);
-        });
+        // RESTORED: :e and :o
         VimApi.defineEx("edit", "e", function() { document.getElementById("open-file-button").click(); });
         VimApi.defineEx("open", "o", function() { document.getElementById("open-file-button").click(); });
-
+        VimApi.defineEx("write", "w", function() { document.getElementById("save-file-button").click(); });
+        VimApi.defineEx("wq", "wq", function() { 
+          document.getElementById("save-file-button").click();
+          setTimeout(() => { window.close(); }, 150);
+        });
+        VimApi.defineEx("quit", "q", function() { window.close(); });
+        
         VimApi.map("ZZ", ":wq<CR>", "normal");
         VimApi.map("ZQ", ":q<CR>", "normal");
       });
     });
 
-    // 3. File Handling
+    // 4. File Core Logic
     async function handleFileEntry(handleOrFile) {
-      let file;
-      if (handleOrFile.getFile) {
-        fileHandle = handleOrFile;
-        file = await fileHandle.getFile();
-      } else {
-        file = handleOrFile;
-        fileHandle = null; 
+      try {
+        let file;
+        if (handleOrFile.getFile) {
+          fileHandle = handleOrFile;
+          file = await fileHandle.getFile();
+        } else {
+          file = handleOrFile;
+          fileHandle = null; 
+        }
+        const contents = await file.text();
+        editor.getSession().setValue(contents);
+        originalFileName = file.name;
+        
+        const mode = getModeFromFilename(file.name);
+        editor.getSession().setMode("ace/mode/" + mode);
+        document.getElementById("status").textContent = originalFileName;
+        editor.focus();
+      } catch (err) {
+        console.error("Failed to load file", err);
       }
-      const contents = await file.text();
-      editor.getSession().setValue(contents);
-      originalFileName = file.name;
-      
-      // Use native Ace mode detection
-      editor.getSession().setMode("ace/mode/" + getModeFromFilename(file.name));
-      document.getElementById("status").textContent = originalFileName;
-      setTimeout(() => { editor.focus(); }, 10);
     }
 
-    // Open/Save logic
+    // Event Listeners
     document.getElementById("open-file-button").addEventListener("click", async () => {
-      if (supportsFileSystemAccess) {
+      if ('showOpenFilePicker' in window) {
         try {
           const [handle] = await window.showOpenFilePicker();
           handleFileEntry(handle);
@@ -121,43 +142,34 @@
       }
     });
 
-    document.getElementById("save-file-button").addEventListener("click", async function() {
+    document.getElementById("save-file-button").addEventListener("click", async () => {
       if (!fileHandle) {
-          if (originalFileName) {
-              const blob = new Blob([editor.getValue()], {type: "text/plain"});
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url; a.download = originalFileName; a.click();
-          }
-          return;
+        const blob = new Blob([editor.getValue()], {type: "text/plain"});
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = originalFileName || "file.txt";
+        a.click();
+        return;
       }
-      try {
-        const writable = await fileHandle.createWritable();
-        await writable.write(editor.getValue());
-        await writable.close();
-        document.getElementById("status").textContent = "Saved: " + originalFileName;
-      } catch (e) { console.error(e); }
+      const writable = await fileHandle.createWritable();
+      await writable.write(editor.getValue());
+      await writable.close();
+      document.getElementById("status").textContent = "Saved: " + originalFileName;
     });
 
     function getModeFromFilename(filename) {
       const ext = filename.split('.').pop().toLowerCase();
-      const modes = { "js":"javascript", "py":"python", "fs":"forth", "fth":"forth", "forth":"forth", "html":"html", "css":"css" };
+      const modes = { "js":"javascript", "py":"python", "fs":"forth", "fth":"forth", "forth":"forth", "html":"html", "css":"css", "json":"json", "md":"markdown" };
       return modes[ext] || "text";
     }
 
-    // Drag & Drop
+    // Drag and Drop
     const container = document.getElementById("editor");
     container.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
     container.addEventListener("drop", async e => {
       e.preventDefault();
-      const item = e.dataTransfer.items[0];
-      if (item && item.kind === 'file') {
-        if (typeof item.getAsFileSystemHandle === 'function') {
-          handleFileEntry(await item.getAsFileSystemHandle());
-        } else {
-          handleFileEntry(e.dataTransfer.files[0]);
-        }
-      }
+      const file = e.dataTransfer.files[0];
+      if (file) handleFileEntry(file);
     });
 
     window.onload = () => { setTimeout(() => editor.focus(), 100); };
