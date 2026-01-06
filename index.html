@@ -12,13 +12,11 @@
     body { margin: 0; padding: 0; overflow: hidden; background-color: #272822; color: #f8f8f2; }
     #editor { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
     #status { position: absolute; bottom: 10px; right: 10px; color: #75715e; z-index: 1000; font-family: monospace; font-size: 14px; pointer-events: none; }
-    #install-button { position: absolute; top: 10px; right: 10px; z-index: 1000; display: none; background: #f92672; color: white; border: none; padding: 8px 12px; cursor: pointer; font-family: monospace; font-weight: bold; }
   </style>
 </head>
 <body>  
   <button id="open-file-button" style="display: none;">Open</button>
   <button id="save-file-button" style="display: none;">Save</button>
-  <button id="install-button">Install AceVim</button>
   <span id="status"></span>
   <div id="editor"></div>
 
@@ -74,7 +72,6 @@
           if (text) navigator.clipboard.writeText(text);
         });
 
-        // Custom Ex Commands
         VimApi.defineEx("write", "w", function() { document.getElementById("save-file-button").click(); });
         VimApi.defineEx("quit", "q", function() { window.close(); });
         VimApi.defineEx("wq", "wq", function() { 
@@ -82,7 +79,6 @@
             setTimeout(() => { window.close(); }, 150);
         });
 
-        // Shortcut Mappings
         VimApi.map("ZZ", ":wq<CR>", "normal");
         VimApi.map("ZQ", ":q<CR>", "normal");
       });
@@ -132,11 +128,10 @@
       });
     }
 
-    // 7. Save Logic (Supports :w, ZZ, :wq)
+    // 7. Save Logic
     document.getElementById("save-file-button").addEventListener("click", async function() {
       if (!fileHandle) {
           if (originalFileName) {
-              // Fallback download if no system handle exists
               const blob = new Blob([editor.getValue()], {type: "text/plain"});
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
@@ -151,7 +146,6 @@
         document.getElementById("status").textContent = "Saved: " + originalFileName;
       } catch (e) { 
         console.error(e);
-        alert("Save failed. Make sure you granted permission."); 
       }
     });
 
@@ -161,21 +155,12 @@
       return modes[ext] || "text";
     }
 
-    // PWA Service Worker & Install Logic
+    // PWA Service Worker (Offline Support)
     if ('serviceWorker' in navigator) {
       const sw = `self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));`;
       const blob = new Blob([sw], {type: 'text/javascript'});
       navigator.serviceWorker.register(URL.createObjectURL(blob));
     }
-
-    let deferredPrompt;
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault(); deferredPrompt = e;
-      document.getElementById('install-button').style.display = 'block';
-    });
-    document.getElementById('install-button').addEventListener('click', () => {
-      if(deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; }
-    });
   </script>
 </body>
 </html>
