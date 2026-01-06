@@ -163,6 +163,31 @@
       }
     });
     
+    // Add drag and drop support
+    document.body.addEventListener("dragover", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    
+    document.body.addEventListener("drop", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      if (e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          editor.getSession().setValue(event.target.result);
+          const mode = getModeFromFilename(file.name);
+          editor.getSession().setMode("ace/mode/" + mode);
+          originalFileName = file.name;
+          fileHandle = null; // Clear file handle since drag-drop doesn't provide one
+          document.getElementById("status").textContent = originalFileName + " (download mode)";
+        };
+        reader.readAsText(file);
+      }
+    });
+    
     function getModeFromFilename(filename) {
       var ext = filename.split('.').pop().toLowerCase();
       var modes = {
