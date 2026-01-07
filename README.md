@@ -5,6 +5,6 @@
 - :e or :o or Ctrl-O to open a local file  
 - :w to save
 - right click text file, select "open with"/AceVim tested in Windows/MS Edge and ChromeOS/Chrome
-- Avoid opening files via drag and drop, the can't be updated. Only a copy will be saved.
+- Ctrl-, to see Ace settings
   
 try here: https://ronnac.github.io/acevim/  
