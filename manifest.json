@@ -6,7 +6,7 @@
   "background_color": "#272822",
   "theme_color": "#272822",
   "icons": [{
-    "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192'%3E%3Cellipse cx='47' cy='110' rx='45' ry='35' fill='%230FFFFF'/%3E%3Cellipse cx='96' cy='90' rx='55' ry='50' fill='%230FFFFF'/%3E%3Cellipse cx='146' cy='110' rx='45' ry='35' fill='%230FFFFF'/%3E%3Crect x='47' y='125' width='100' height='20' fill='%230FFFFF'/%3E%3Ctext x='60' y='140' font-weight='bold' font-size='110' font-family='Arial%2C sans-serif' fill='%23FFA07A'%3EV%3C/text%3E%3C/svg%3E",
+    "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192'%3E%3Crect x='0' y='0' width='192' height='192' fill='none'%2F%3E%3Cellipse cx='47' cy='110' rx='45' ry='35' fill='%230FFFFF'%2F%3E%3Cellipse cx='96' cy='90' rx='55' ry='50' fill='%230FFFFF'%2F%3E%3Cellipse cx='146' cy='110' rx='45' ry='35' fill='%230FFFFF'%2F%3E%3Crect x='47' y='125' width='100' height='20' fill='%230FFFFF'%2F%3E%3Ctext x='60' y='140' font-weight='bold' font-size='110' font-family='Arial%2C sans-serif' fill='%23FFA07A'%3EV%3C%2Ftext%3E%3C%2Fsvg%3E",
     "sizes": "192x192",
     "type": "image/svg+xml"
   }],
